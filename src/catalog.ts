@@ -22,13 +22,6 @@ export interface ListQuery {
   page: number;
 }
 
-export interface TrackRow {
-  disc: number;
-  number: number;
-  title: string;
-  duration_ms: number | null;
-}
-
 const PAGE_SIZE = { grid: 60, list: 200 } as const;
 export const pageSize = (view: View) => PAGE_SIZE[view];
 
@@ -79,11 +72,8 @@ function where(q: ListQuery): { sql: string; binds: Array<string | number> } {
   const binds: Array<string | number> = [];
   if (q.q) {
     const term = like(q.q);
-    parts.push(
-      `(title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\' OR EXISTS (
-         SELECT 1 FROM tracks t WHERE t.album_id = albums.id AND t.title LIKE ? ESCAPE '\\'))`,
-    );
-    binds.push(term, term, term);
+    parts.push(`(title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\')`);
+    binds.push(term, term);
   }
   if (q.decade !== null) {
     parts.push("year BETWEEN ? AND ?");
@@ -139,15 +129,9 @@ export async function facets(db: D1Database): Promise<Facets> {
   return { total: total?.n ?? 0, decades: decades.results ?? [], genres: genres.results ?? [] };
 }
 
-/** A listed album and its tracks; null if missing or removed. */
-export async function getAlbum(db: D1Database, id: number): Promise<{ album: AlbumRow; tracks: TrackRow[] } | null> {
-  const album = await db.prepare("SELECT * FROM albums WHERE id = ? AND status = 'listed'").bind(id).first<AlbumRow>();
-  if (!album) return null;
-  const tracks = await db
-    .prepare("SELECT disc, number, title, duration_ms FROM tracks WHERE album_id = ? ORDER BY disc, number")
-    .bind(id)
-    .all<TrackRow>();
-  return { album, tracks: tracks.results ?? [] };
+/** A listed album; null if missing or removed. */
+export async function getAlbum(db: D1Database, id: number): Promise<AlbumRow | null> {
+  return db.prepare("SELECT * FROM albums WHERE id = ? AND status = 'listed'").bind(id).first<AlbumRow>();
 }
 
 /** Other listed albums by the same artist. */

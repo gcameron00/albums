@@ -10,7 +10,7 @@ Hosted at **https://albums.gcameron.com** on Cloudflare (Worker + D1).
 
 | Area | Summary |
 | --- | --- |
-| **Add** | Paste an Apple Music album link on the site, or share it from the Music app through an iOS Shortcut. The Worker looks up title, artist, year, genre, artwork and track list from the Apple Music API (or, without a key, the album's Apple Music page). |
+| **Add** | Paste an Apple Music album link on the site, or share it from the Music app through an iOS Shortcut. The Worker looks up title, artist, year, genre, artwork, track count and length from the Apple Music API (or, without a key, the album's Apple Music page). |
 | **Display** | Public, read-only views, with an optional note per album: an artwork grid, a compact list and a page of playable Apple Music embeds. Sort and filter by artist, year, decade, genre and date added. |
 | **Remove** | Signed-in only. A removed album leaves the public list but is kept on a private **History** page with the date and an optional reason, and can be restored. |
 | **MCP** | A remote MCP server at `/mcp`, so Claude can be connected to the list: search, browse, pick something to play, look at history, add and remove. Owner only. |
@@ -43,7 +43,7 @@ deployment set-up and the build order.
   Album details come from the album's Apple Music page until the Apple Music
   API key is set up ([#5](https://github.com/gcameron00/albums/issues/5)).
 - **Phase 2** (public pages): cover grid and list, filters, search, album
-  pages with player and tracks, About, read-only JSON API.
+  pages with player, About, read-only JSON API.
 
 Next: Phase 3 (play view, random pick). See [docs/PLAN.md](docs/PLAN.md),
 section 9.
@@ -52,11 +52,11 @@ section 9.
 
 | Route | Method | Access | Returns |
 | --- | --- | --- | --- |
-| `/` | GET | public | Cover grid of listed albums. Parameters: `q` (search artist, album and track names), `artist`, `decade` (e.g. `1980`), `genre`, `sort` (`added`, `artist`, `year`, `title`), `view` (`grid`, `list`), `page` |
+| `/` | GET | public | Cover grid of listed albums. Parameters: `q` (search artist and album titles), `artist`, `decade` (e.g. `1980`), `genre`, `sort` (`added`, `artist`, `year`, `title`), `view` (`grid`, `list`), `page` |
 | `/albums/:id` | GET | public | One album: cover, facts, note, Apple Music player (which lists the tracks), more by the artist. 404 if removed |
 | `/about` | GET | public | What the list is |
 | `/api/albums` | GET | public | The list as JSON, same parameters as `/`; `{total, page, page_size, albums}`. CORS open |
-| `/api/albums/:id` | GET | public | One album with `tracks` as JSON |
+| `/api/albums/:id` | GET | public | One album as JSON |
 | `/health` | GET | public | `{"ok":true}` |
 | `/admin` | GET | Access | Who is signed in |
 | `/admin/albums` | POST | Access | Add an album. JSON body `{"url": "<Apple Music link>", "note": "…", "source": "web\|shortcut\|mcp"}`; answers `{outcome, summary, album}` (see [docs/SHORTCUT.md](docs/SHORTCUT.md)) |

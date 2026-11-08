@@ -169,10 +169,10 @@ async function publicRoute(env: Env, url: URL): Promise<Response | null> {
   const albumMatch = path.match(/^\/albums\/([^/]+)\/?$/);
   if (albumMatch) {
     const id = idParam(albumMatch[1]);
-    const found = id === null ? null : await getAlbum(env.DB, id);
-    if (!found) return html(notFoundPage(), 404);
-    const more = await moreByArtist(env.DB, found.album);
-    return html(albumPage(found.album, more, storefront));
+    const album = id === null ? null : await getAlbum(env.DB, id);
+    if (!album) return html(notFoundPage(), 404);
+    const more = await moreByArtist(env.DB, album);
+    return html(albumPage(album, more, storefront));
   }
 
   if (path === "/api/albums") {
@@ -189,9 +189,9 @@ async function publicRoute(env: Env, url: URL): Promise<Response | null> {
   const apiMatch = path.match(/^\/api\/albums\/([^/]+)$/);
   if (apiMatch) {
     const id = idParam(apiMatch[1]);
-    const found = id === null ? null : await getAlbum(env.DB, id);
-    if (!found) return publicJson({ error: "Not found." }, 404);
-    return publicJson({ ...publicAlbum(found.album), tracks: found.tracks });
+    const album = id === null ? null : await getAlbum(env.DB, id);
+    if (!album) return publicJson({ error: "Not found." }, 404);
+    return publicJson(publicAlbum(album));
   }
 
   return null;

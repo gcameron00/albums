@@ -22,7 +22,6 @@ function info(overrides: Partial<AlbumInfo>): AlbumInfo {
     durationMs: null,
     artworkUrl: null,
     appleUrl: "https://music.apple.com/ch/album/1",
-    tracks: [],
     ...overrides,
   };
 }
@@ -83,9 +82,10 @@ describe("list page", () => {
     expect(titles(await text("/?sort=title"))).toEqual(["Disintegration", "Hopes and Fears", "Kick (Remastered)", "Violator"]);
   });
 
-  it("searches titles, artists and track names", async () => {
+  it("searches album titles and artists, not track names", async () => {
     const { text } = await setup();
-    expect(titles(await text("/?q=enjoy+the"))).toEqual(["Violator"]);
+    expect(titles(await text("/?q=viol"))).toEqual(["Violator"]);
+    expect(titles(await text("/?q=enjoy+the"))).toEqual([]);
     expect(titles(await text("/?q=keane"))).toEqual(["Hopes and Fears"]);
     expect(titles(await text("/?q=100%25"))).toEqual([]);
     expect(await text("/?q=zzz")).toContain("No albums match.");
@@ -152,11 +152,11 @@ describe("about and API", () => {
     expect(Object.keys(body.albums[0]!)).not.toContain("removed_reason");
   });
 
-  it("returns one album with tracks, and 404 for removed ones", async () => {
+  it("returns one album, and 404 for removed ones", async () => {
     const { get, ids } = await setup();
-    const body = (await (await get(`/api/albums/${ids["665404621"]}`)).json()) as { title: string; tracks: unknown[] };
+    const body = (await (await get(`/api/albums/${ids["665404621"]}`)).json()) as { title: string; track_count: number };
     expect(body.title).toBe("Violator");
-    expect(body.tracks).toHaveLength(9);
+    expect(body.track_count).toBe(9);
     expect((await get(`/api/albums/${ids["10"]}`)).status).toBe(404);
   });
 });

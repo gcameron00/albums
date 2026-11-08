@@ -78,17 +78,14 @@ describe("parseMusicApiAlbum", () => {
       appleUrl: "https://music.apple.com/ch/album/violator/665404621",
       artworkUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/bb/cc/example/source/{w}x{h}bb.jpg",
     });
-    expect(album.tracks).toHaveLength(9);
-    expect(album.tracks[5]).toEqual({ disc: 1, number: 6, title: "Enjoy the Silence", durationMs: 245000 });
     expect(album.durationMs).toBe(9 * 240000 + 36000);
   });
 
-  it("sorts tracks by disc and number", () => {
-    expect(parseMusicApiAlbum(kickApi, "ch").tracks.map((t) => `${t.disc}.${t.number} ${t.title}`)).toEqual([
-      "1.1 Guns in the Sky",
-      "1.2 Need You Tonight",
-      "2.1 Bonus",
-    ]);
+  it("totals the track durations without keeping the tracks", () => {
+    const album = parseMusicApiAlbum(kickApi, "ch");
+    expect(album.trackCount).toBe(3);
+    expect(album.durationMs).toBe(324000);
+    expect(Object.keys(album)).not.toContain("tracks");
   });
 
   it("fails when there is no album in the answer", () => {
@@ -112,7 +109,7 @@ describe("album page fallback", () => {
       appleUrl: "https://music.apple.com/ch/album/violator/665404621",
       artworkUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/bb/cc/example/source/{w}x{h}bb.jpg",
     });
-    expect(album.tracks[5]).toEqual({ disc: 1, number: 6, title: "Enjoy the Silence", durationMs: 245000 });
+    expect(album.durationMs).toBe(9 * 240000 + 36000);
   });
 
   it("fails when the page has no album", () => {

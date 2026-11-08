@@ -30,7 +30,7 @@ function filters(q: ListQuery, f: Facets): string {
     `<option value="${e(value)}"${selected ? " selected" : ""}>${e(label)}</option>`;
   return `      <form class="filters" method="get" action="/" role="search">
         <label class="search"><span class="visually-hidden">Search</span>
-          <input type="search" name="q" value="${e(q.q)}" placeholder="Artist, album or track" autocomplete="off"></label>
+          <input type="search" name="q" value="${e(q.q)}" placeholder="Artist or album" autocomplete="off"></label>
         <label><span class="visually-hidden">Sort</span>
           <select name="sort">${(Object.entries(SORTS) as Array<[Sort, string]>)
             .map(([value, label]) => option(value, label, q.sort === value))
