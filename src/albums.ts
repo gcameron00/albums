@@ -8,10 +8,14 @@ export interface AlbumRow {
   apple_id: string;
   storefront: string;
   title: string;
+  edition: string | null;
   artist: string;
   artist_id: string | null;
   release_date: string | null;
+  /** Year shown, sorted and filtered on: original_year if set, else the edition's. */
   year: number | null;
+  /** Set by hand when release_date is a reissue's. */
+  original_year: number | null;
   genre: string | null;
   track_count: number | null;
   duration_ms: number | null;
@@ -58,6 +62,24 @@ export async function updateNote(db: D1Database, album: AlbumRow, note: string |
     db
       .prepare("INSERT INTO events (album_id, action, at, source, detail) VALUES (?, 'edited', ?, ?, ?)")
       .bind(album.id, opts.now, opts.source, JSON.stringify({ note })),
+  ]);
+  return (await findById(db, album.id))!;
+}
+
+export const MIN_YEAR = 1900;
+
+/**
+ * Sets or clears the original year. The shown year follows it, or falls
+ * back to the year of Apple's release date when cleared.
+ */
+export async function setOriginalYear(db: D1Database, album: AlbumRow, original: number | null, opts: ChangeOpts): Promise<AlbumRow> {
+  const editionYear = album.release_date ? Number(album.release_date.slice(0, 4)) : null;
+  const shown = original ?? editionYear ?? (album.original_year === null ? album.year : null);
+  await db.batch([
+    db.prepare("UPDATE albums SET original_year = ?, year = ? WHERE id = ?").bind(original, shown, album.id),
+    db
+      .prepare("INSERT INTO events (album_id, action, at, source, detail) VALUES (?, 'edited', ?, ?, ?)")
+      .bind(album.id, opts.now, opts.source, JSON.stringify({ original_year: original })),
   ]);
   return (await findById(db, album.id))!;
 }
@@ -117,14 +139,15 @@ export async function addAlbum(
   const statements = [
     db
       .prepare(
-        `INSERT INTO albums (apple_id, storefront, title, artist, artist_id, release_date, year, genre,
+        `INSERT INTO albums (apple_id, storefront, title, edition, artist, artist_id, release_date, year, genre,
            track_count, duration_ms, artwork_url, apple_url, note, status, added_at, source)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'listed', ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'listed', ?, ?)`,
       )
       .bind(
         info.appleId,
         info.storefront,
         info.title,
+        info.edition,
         info.artist,
         info.artistId,
         info.releaseDate,

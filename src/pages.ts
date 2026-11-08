@@ -168,6 +168,17 @@ function noteHtml(note: string): string {
     .join("");
 }
 
+/**
+ * The edition behind Apple's data, shown only on the album page: its label
+ * (taken out of the title) and its release year when that differs from the
+ * year shown.
+ */
+function editionLine(a: AlbumRow): string {
+  const year = a.release_date ? Number(a.release_date.slice(0, 4)) : null;
+  const parts = [a.edition ?? "", year && year !== a.year ? `released ${year}` : ""].filter(Boolean);
+  return parts.length ? `          <p class="edition">This edition: ${e(parts.join(", "))}</p>\n` : "";
+}
+
 /** Confirmations shown on an album page after an owner action (?msg=). */
 export const ALBUM_MESSAGES: Record<string, string> = {
   created: "Added to the list.",
@@ -202,6 +213,7 @@ export function albumPage(
           <h1>${e(a.title)}</h1>
           <p class="artist"><a href="${e(artistHref(a.artist))}">${e(a.artist)}</a></p>
           <p class="facts">${facts.map(e).join(" · ")}</p>
+${editionLine(a)}
 ${a.note ? `          <div class="note">${noteHtml(a.note)}</div>\n` : ""}          <p class="links"><a class="button" href="${e(a.apple_url)}" rel="noopener">Open in Apple Music</a></p>
           <p class="added">On the list since ${e(formatDate(a.added_at))}${
             opts.signedIn ? ` · <a href="/admin/albums/${a.id}">Edit</a>` : ""
@@ -236,7 +248,7 @@ export function aboutPage(): string {
         <p>A personal list of albums worth playing from start to finish: records where the whole thing holds up, not just a great track or two.</p>
         <p>Mostly original studio albums. Live albums and compilations stay off the list, with the odd exception.</p>
         <p>There is no ranking. Everything here is a favourite of some kind.</p>
-        <p>Albums play through Apple Music. The players on album pages need an Apple Music subscription for full tracks; without one they play previews.</p>
+        <p>Albums play through Apple Music. The players need an Apple Music subscription for full tracks; without one they play previews.</p>
         <p>The list is also available as JSON at <a href="/api/albums">/api/albums</a>.</p>
       </article>`,
     { nav: "about", description: "What this list of albums is, and how albums get on it." },

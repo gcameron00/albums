@@ -1,3 +1,5 @@
+import { splitEdition } from "./edition.ts";
+
 /**
  * Apple Music links and album metadata.
  *
@@ -19,7 +21,10 @@ export type AppleLink =
 export interface AlbumInfo {
   appleId: string;
   storefront: string;
+  /** Title without edition labels (see src/edition.ts). */
   title: string;
+  /** Edition label taken out of Apple's title, e.g. "Remastered". */
+  edition: string | null;
   artist: string;
   artistId: string | null;
   releaseDate: string | null;
@@ -170,7 +175,7 @@ export function parseMusicApiAlbum(body: Json | null, storefront: string): Album
   return {
     appleId,
     storefront,
-    title,
+    ...splitEdition(title),
     artist,
     artistId: idOf(related(album, "artists")[0] ?? {}, "id"),
     ...datePart(str(a, "releaseDate")),
@@ -279,7 +284,7 @@ export function parseAlbumPage(html: string, albumId: string, storefront: string
   return {
     appleId: albumId,
     storefront,
-    title,
+    ...splitEdition(title),
     artist: artistNames.join(" & "),
     artistId: lastId(str(artists[0], "url")),
     releaseDate,

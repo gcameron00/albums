@@ -10,10 +10,10 @@ Hosted at **https://albums.gcameron.com** on Cloudflare (Worker + D1).
 
 | Area | Summary |
 | --- | --- |
-| **Add** | Paste an Apple Music album link on the site, or share it from the Music app through an iOS Shortcut. The Worker looks up title, artist, year, genre, artwork, track count and length from the Apple Music API (or, without a key, the album's Apple Music page). |
-| **Display** | Public, read-only views, with an optional note per album: an artwork grid, a compact list and a page of playable Apple Music embeds. Sort and filter by artist, year, decade, genre and date added. |
+| **Add** | Share an album from the Music app through an iOS Shortcut, paste its Apple Music link into the form at `/admin`, or ask Claude. The Worker reads title, artist, year, genre, artwork, track count and length from the album's Apple Music page (or the Apple Music API once a key is set, [#5](https://github.com/gcameron00/albums/issues/5)). |
+| **Display** | Public, read-only views, with an optional note per album: a cover grid, a sortable list and a page of Apple Music players. Search by artist or title, filter by decade or genre, sort by date added, artist, year or title, or pick one at random. |
 | **Remove** | Signed-in only. A removed album leaves the public list but is kept on a private **History** page with the date and an optional reason, and can be restored. |
-| **MCP** | A remote MCP server at `/mcp`, so Claude can be connected to the list: search, browse, pick something to play, look at history, add and remove. Owner only. |
+| **MCP** | A remote MCP server at `/mcp`, so Claude can be connected to the list: search, pick something to play, statistics, history, add, edit notes, set original years, remove and put back. Owner only. |
 | **Access** | Anyone can view. Editing, history, the Shortcut endpoint and MCP are behind Cloudflare Access (one-time PIN by email) and limited to me. |
 
 ## How it works
@@ -22,7 +22,7 @@ Hosted at **https://albums.gcameron.com** on Cloudflare (Worker + D1).
 Music app ──share──▶ iOS Shortcut ──POST url──┐
 Site (signed in) ──paste link──────────────────┼─▶ Worker ──▶ D1 (albums, history)
 Claude ──MCP (OAuth via Cloudflare Access)─────┘      │
-                                                      └──▶ Apple Music API (metadata)
+                                                      └──▶ Apple Music page (metadata)
 Visitors ──GET──▶ Worker ──▶ HTML pages + Apple Music embeds
 ```
 
@@ -44,17 +44,17 @@ deployment set-up and the build order.
   API key is set up ([#5](https://github.com/gcameron00/albums/issues/5)).
 - **Phase 2** (public pages): cover grid and list, filters, search, album
   pages with player, About, read-only JSON API.
-
 - **Phase 3** (play): `?view=play` shows an Apple Music player per album
   (12 per page, loaded as they scroll into view); `/random` and *Play
   something* open a random album, keeping the current filters.
-
 - **Phase 4** (owner pages): `/admin` add form, edit page per album (note,
   remove with a private reason), private history with *Put back*; list view
-  sortable by column heading.
+  sortable by column heading; *Admin* link in the header.
+- **Phase 5** (Shortcut): share from the Music app; working.
+- **Phase 6** (MCP): `/mcp` for Claude, behind Access with Managed OAuth;
+  connected and working. See [Connecting Claude](#connecting-claude).
 
-- **Phase 6** (MCP): `/mcp` for Claude, behind Access with Managed OAuth.
-  See [Connecting Claude](#connecting-claude).
+All phases up to 6 are done and live.
 
 Next: nice-to-haves (Phase 7). See [docs/PLAN.md](docs/PLAN.md), section 9.
 
@@ -63,7 +63,7 @@ Next: nice-to-haves (Phase 7). See [docs/PLAN.md](docs/PLAN.md), section 9.
 | Route | Method | Access | Returns |
 | --- | --- | --- | --- |
 | `/` | GET | public | Cover grid of listed albums. Parameters: `q` (search artist and album titles), `artist`, `decade` (e.g. `1980`), `genre`, `sort` (`added`, `artist`, `year`, `title`), `dir` (`asc` or `desc`; defaults to newest first for `added`, A–Z or oldest first otherwise), `view` (`grid`, `list`, `play`), `page` |
-| `/albums/:id` | GET | public | One album: cover, facts, note, Apple Music player (which lists the tracks), more by the artist. 404 if removed |
+| `/albums/:id` | GET | public | One album: cover, facts, note, the edition behind Apple's data (label and release year), Apple Music player (which lists the tracks), more by the artist. 404 if removed |
 | `/random` | GET | public | Redirects to a random listed album; takes the same `q`, `artist`, `decade` and `genre` filters (back to the filtered list if none match) |
 | `/about` | GET | public | What the list is |
 | `/api/albums` | GET | public | The list as JSON, same parameters as `/`; `{total, page, page_size, albums}`. CORS open |
@@ -72,6 +72,7 @@ Next: nice-to-haves (Phase 7). See [docs/PLAN.md](docs/PLAN.md), section 9.
 | `/admin` | GET | Access | Add form (Apple Music link and optional note) |
 | `/admin/albums` | POST | Access | Add an album. Form, or JSON `{"url": "<Apple Music link>", "note": "…", "source": "web\|shortcut\|mcp"}` answered with `{outcome, summary, album}` (see [docs/SHORTCUT.md](docs/SHORTCUT.md)) |
 | `/admin/albums/:id` | GET, POST | Access | Edit page; POST saves the note (`note`; empty clears it) |
+| `/admin/albums/:id/year` | POST | Access | Set the original year (`original_year`; empty goes back to Apple's) |
 | `/admin/albums/:id/remove` | POST | Access | Remove from the list, with an optional private `reason` |
 | `/admin/albums/:id/restore` | POST | Access | Put a removed album back |
 | `/admin/history` | GET | Access | Removed albums with reasons and *Put back*, and the change log |
@@ -83,6 +84,14 @@ or JSON (answered with JSON). Forms must come from this site
 *Edit* link when the browser has a Cloudflare Access session cookie.
 
 Removed albums never appear on public pages or in the API.
+
+**Years and editions.** Apple's date is the date of the edition you added,
+which for a remaster is the reissue's (Kick (Remastered): 2013). Set the
+**original year** on the album's edit page or with `set_original_year` in
+Claude; it becomes the year shown, sorted and filtered on, and clearing it
+goes back to Apple's. Edition labels such as "(Remastered)" or "[2006
+Remaster]" are taken out of titles when an album is added and shown, with
+the edition's year, only on the album page.
 
 ## Connecting Claude
 
@@ -109,14 +118,15 @@ chat and ask, for example, "pick an album from the 80s", "what's on my list
 by INXS?", or "add this: https://music.apple.com/ch/album/…".
 
 Tools: `search_albums`, `get_album`, `random_album`, `get_stats`,
-`list_history`, `add_album`, `update_note`, `remove_album`, `restore_album`
+`list_history`, `add_album`, `update_note`, `set_original_year`,
+`remove_album`, `restore_album`
 (details in [docs/PLAN.md](docs/PLAN.md), section 7). Changes made through
 Claude show as `mcp` in the history. `/mcp` refuses service tokens: only a
 person can connect. Connections are revoked in the Zero Trust dashboard.
 
-If Managed OAuth turns out not to work on a path-based application, give
-`/mcp` an Access application of its own (same policy, Managed OAuth on) and
-add its audience tag to `ACCESS_AUD` in `wrangler.toml`, comma-separated.
+Managed OAuth works on the path-based application (verified 2026-11-08). If
+`/mcp` ever needs an Access application of its own, add its audience tag to
+`ACCESS_AUD` in `wrangler.toml`, comma-separated.
 
 ## Deployment
 
@@ -133,8 +143,11 @@ Settings → Build):
 
 1. **Connect** the GitHub repo `gcameron00/albums`; production branch `main`.
 2. Build command: leave empty. Deploy command: `npm run deploy`.
-3. Enable **non-production branch builds** with deploy command
-   `npm run preview`.
+3. Enable **non-production branch builds** and set their own
+   **non-production branch deploy command** to `npm run preview`. It is a
+   separate field from the production deploy command (and from the build
+   command); left at its default, previews deploy without migrating
+   `albums-preview`, so new columns or tables are missing there.
 4. The build token needs Workers Scripts and D1 edit rights (the default
    token Workers Builds creates has them).
 
@@ -164,6 +177,16 @@ without one the Worker reads the album's music.apple.com page instead.
 
 If the key cannot be read, the Worker logs "Apple Music key could not be
 used" and falls back to the album page.
+
+**Checking a preview's migrations**: the preview build log should show
+`wrangler d1 migrations apply PREVIEW_DB` before `wrangler preview`. If it
+does not, the non-production deploy command is not `npm run preview`.
+
+Each branch's preview keeps the settings it was created with. **Previews
+Base** (Settings → Builds) only sets the default for new previews; an
+existing preview has its own **Preview command** on its own settings page
+(Workers & Pages → `albums` → that preview → Settings), which must also be
+`npm run preview`.
 
 ## Development
 

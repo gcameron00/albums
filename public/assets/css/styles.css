@@ -128,7 +128,8 @@ table.albums td:nth-child(1) a { color: var(--text); }
 .album-cover .cover { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--radius); box-shadow: var(--shadow); display: block; }
 .album-info h1 { font-size: 2rem; }
 .album-info .artist { font-size: 1.25rem; margin: 0 0 0.25rem; }
-.album-info .facts, .album-info .added { color: var(--muted); margin: 0.25rem 0; }
+.album-info .facts, .album-info .added, .album-info .edition { color: var(--muted); margin: 0.25rem 0; }
+.album-info .edition { font-size: 0.875rem; }
 .album-info .added { font-size: 0.875rem; margin-top: 1rem; }
 .note { border-left: 3px solid var(--accent); padding: 0.1rem 0 0.1rem 1rem; margin: 1.25rem 0; }
 .note p { margin: 0.5rem 0; }
