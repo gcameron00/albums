@@ -1,5 +1,5 @@
 import type { AlbumRow } from "./albums.ts";
-import { pageSize, queryParams, SORTS, type Facets, type ListQuery, type Sort, type View } from "./catalog.ts";
+import { DEFAULT_DIR, pageSize, queryParams, SORTS, type Dir, type Facets, type ListQuery, type Sort, type View } from "./catalog.ts";
 import { artwork, formatAlbumTime, formatDate, plural } from "./format.ts";
 import { escapeHtml as e, page } from "./html.ts";
 
@@ -75,9 +75,22 @@ ${albums
       </ul>`;
 }
 
-function table(albums: AlbumRow[]): string {
+/** Column heading that sorts by it; a second click reverses the order. */
+function sortHeading(q: ListQuery, sort: Sort, label: string, cls = ""): string {
+  const active = q.sort === sort;
+  const dir: Dir = active ? (q.dir === "asc" ? "desc" : "asc") : DEFAULT_DIR[sort];
+  const aria = active ? ` aria-sort="${q.dir === "asc" ? "ascending" : "descending"}"` : "";
+  const arrow = active ? `<span class="arrow" aria-hidden="true">${q.dir === "asc" ? "▲" : "▼"}</span>` : "";
+  return `<th${cls ? ` class="${cls}"` : ""}${aria}><a href="${e(listHref(q, { sort, dir, page: 1 }))}">${label}${arrow}</a></th>`;
+}
+
+function table(albums: AlbumRow[], q: ListQuery): string {
   return `      <table class="albums">
-        <thead><tr><th>Artist</th><th>Album</th><th>Year</th><th class="wide">Genre</th><th class="wide">Length</th><th class="wide">Added</th></tr></thead>
+        <thead><tr>${sortHeading(q, "artist", "Artist")}${sortHeading(q, "title", "Album")}${sortHeading(
+          q,
+          "year",
+          "Year",
+        )}<th class="wide">Genre</th><th class="wide">Length</th>${sortHeading(q, "added", "Added", "wide")}</tr></thead>
         <tbody>
 ${albums
   .map(
@@ -131,7 +144,7 @@ export function listPage(q: ListQuery, f: Facets, result: { total: number; album
   if (f.total === 0) content = `      <p class="empty">Nothing on the list yet.</p>`;
   else if (result.albums.length === 0)
     content = `      <p class="empty">No albums match. <a href="${e(listHref({ ...q, q: "", decade: null, genre: "", artist: "" }))}">Show all</a></p>`;
-  else content = q.view === "list" ? table(result.albums) : q.view === "play" ? players(result.albums, storefront) : grid(result.albums);
+  else content = q.view === "list" ? table(result.albums, q) : q.view === "play" ? players(result.albums, storefront) : grid(result.albums);
 
   return page(
     q.artist ? `${q.artist} – Albums` : "Albums",
@@ -155,7 +168,25 @@ function noteHtml(note: string): string {
     .join("");
 }
 
-export function albumPage(a: AlbumRow, more: AlbumRow[], storefront: string): string {
+/** Confirmations shown on an album page after an owner action (?msg=). */
+export const ALBUM_MESSAGES: Record<string, string> = {
+  created: "Added to the list.",
+  duplicate: "Already on the list.",
+  restored: "Back on the list.",
+  saved: "Note saved.",
+};
+
+export function flash(message: string | undefined): string {
+  return message ? `      <p class="flash" role="status">${e(message)}</p>
+` : "";
+}
+
+export function albumPage(
+  a: AlbumRow,
+  more: AlbumRow[],
+  storefront: string,
+  opts: { signedIn?: boolean; message?: string } = {},
+): string {
   const facts = [
     a.year ? String(a.year) : "",
     a.genre ?? "",
@@ -165,14 +196,16 @@ export function albumPage(a: AlbumRow, more: AlbumRow[], storefront: string): st
   const og = artwork(a.artwork_url, 600);
   return page(
     `${a.title} – ${a.artist}`,
-    `      <article class="album">
+    `${flash(opts.message)}      <article class="album">
         <div class="album-cover">${cover(a, 600, "cover", false)}</div>
         <div class="album-info">
           <h1>${e(a.title)}</h1>
           <p class="artist"><a href="${e(artistHref(a.artist))}">${e(a.artist)}</a></p>
           <p class="facts">${facts.map(e).join(" · ")}</p>
 ${a.note ? `          <div class="note">${noteHtml(a.note)}</div>\n` : ""}          <p class="links"><a class="button" href="${e(a.apple_url)}" rel="noopener">Open in Apple Music</a></p>
-          <p class="added">On the list since ${e(formatDate(a.added_at))}</p>
+          <p class="added">On the list since ${e(formatDate(a.added_at))}${
+            opts.signedIn ? ` · <a href="/admin/albums/${a.id}">Edit</a>` : ""
+          }</p>
         </div>
       </article>
       <section class="player" aria-label="Player">

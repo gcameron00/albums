@@ -205,8 +205,9 @@ Public pages, server-rendered, light/dark, works on a phone.
 | `/admin/history` | **Owner only.** Removed albums (with reasons) and the change log, newest first, with Restore buttons. |
 
 Removed albums are not shown anywhere public (a removed album's page returns
-404). Signed-in extras on the same pages: Add box, Edit note, Remove (with
-optional reason), Restore. No separate admin UI.
+404). Owner pages live under `/admin` (add form, edit page per album with
+note and Remove, history with Put back); album pages link to their edit page
+when an Access session cookie is present.
 
 ## 6. Access control
 
@@ -221,13 +222,17 @@ optional reason), Restore. No separate admin UI.
     (Not *Bypass*: Bypass skips Access, so no JWT would reach the Worker.)
 - The Worker verifies `Cf-Access-Jwt-Assertion` (reuse `src/auth.ts` from
   `groceries`) on every write and fails closed if `ACCESS_AUD` is unset.
-- Public pages show edit controls only when a valid Access cookie/JWT is
-  present (visiting `/admin` once signs me in for the whole site).
+- Album pages show an *Edit* link (to `/admin/albums/:id`) when the
+  `CF_Authorization` cookie is present. Only the link depends on the cookie;
+  the edit page itself is behind Access and the JWT check. Visiting `/admin`
+  once signs me in.
 - Preview URLs get their own Access app (as in `groceries`) so preview data and
   write routes are not open.
 
 Resulting owner routes: `GET /admin/history`, `POST /admin/albums` (add),
-`PATCH /admin/albums/:id` (edit note), `POST /admin/albums/:id/remove`, `POST /admin/albums/:id/restore`.
+`GET`/`POST /admin/albums/:id` (edit page; save note), `POST /admin/albums/:id/remove`,
+`POST /admin/albums/:id/restore`. Each POST takes a same-origin form
+(answered with a redirect) or JSON (answered with JSON).
 The Shortcut posts to `/admin/albums`.
 
 ## 7. MCP server
@@ -289,8 +294,8 @@ filters.
 | 0 | Repo fixes (section 2), D1 prod + preview, Workers Builds, CI, empty `/health` | A branch push gives a preview URL; `main` deploys to albums.gcameron.com. **Done** |
 | 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled. **Done** (Shortcut verified 2026-11-08) |
 | 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop. **Done** |
-| 3 | Play view with lazy Apple Music embeds; `/random` | Albums play in place. **Code done** |
-| 4 | Signed-in UI: add box, edit, remove, restore; `/admin/history` | Full lifecycle from the browser |
+| 3 | Play view with lazy Apple Music embeds; `/random` | Albums play in place. **Done** |
+| 4 | Signed-in UI: add box, edit, remove, restore; `/admin/history`; list view sortable by column heading | Full lifecycle from the browser. **Code done** |
 | 5 | iOS Shortcut ([docs/SHORTCUT.md](SHORTCUT.md), drafted in Phase 1) | Share from Music app → notification "Added: …" |
 | 6 | MCP server + OAuth via Access; connector added in Claude | Claude can search, pick and add albums |
 | 7 | Nice-to-haves: import from examples or an Apple Music playlist, stats page, artwork colour accents, Last.fm "last played" | — |

@@ -41,6 +41,40 @@ export async function findByAppleId(db: D1Database, appleId: string): Promise<Al
   return db.prepare("SELECT * FROM albums WHERE apple_id = ?").bind(appleId).first<AlbumRow>();
 }
 
+/** Any album, listed or removed. */
+export async function findById(db: D1Database, id: number): Promise<AlbumRow | null> {
+  return db.prepare("SELECT * FROM albums WHERE id = ?").bind(id).first<AlbumRow>();
+}
+
+interface ChangeOpts {
+  source: Source;
+  now: string;
+}
+
+/** Sets or clears the note. */
+export async function updateNote(db: D1Database, album: AlbumRow, note: string | null, opts: ChangeOpts): Promise<AlbumRow> {
+  await db.batch([
+    db.prepare("UPDATE albums SET note = ? WHERE id = ?").bind(note, album.id),
+    db
+      .prepare("INSERT INTO events (album_id, action, at, source, detail) VALUES (?, 'edited', ?, ?, ?)")
+      .bind(album.id, opts.now, opts.source, JSON.stringify({ note })),
+  ]);
+  return (await findById(db, album.id))!;
+}
+
+/** Takes an album off the list. The row stays, for the history and restoring. */
+export async function removeAlbum(db: D1Database, album: AlbumRow, reason: string | null, opts: ChangeOpts): Promise<AlbumRow> {
+  await db.batch([
+    db
+      .prepare("UPDATE albums SET status = 'removed', removed_at = ?, removed_reason = ? WHERE id = ?")
+      .bind(opts.now, reason, album.id),
+    db
+      .prepare("INSERT INTO events (album_id, action, at, source, detail) VALUES (?, 'removed', ?, ?, ?)")
+      .bind(album.id, opts.now, opts.source, reason === null ? null : JSON.stringify({ reason })),
+  ]);
+  return (await findById(db, album.id))!;
+}
+
 const ALBUM_ID = "(SELECT id FROM albums WHERE apple_id = ?)";
 
 function duplicate(album: AlbumRow): AddResult {

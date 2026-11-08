@@ -142,3 +142,36 @@ table.albums td:nth-child(1) a { color: var(--text); }
 .player iframe { width: 100%; max-width: 660px; height: 450px; border: 0; border-radius: 10px; overflow: hidden; background: transparent; }
 
 .prose { max-width: 40rem; }
+
+/* Sortable headings */
+table.albums th a { color: inherit; display: inline-flex; gap: 0.25rem; align-items: baseline; }
+table.albums th[aria-sort] { color: var(--text); }
+table.albums th .arrow { font-size: 0.7em; }
+
+/* Messages */
+.flash { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 0.6rem 0.9rem; margin: 0.5rem 0 1rem; }
+.flash.error { border-left-color: #c0392b; }
+
+/* Owner pages */
+.admin-nav { display: flex; gap: 1rem; margin: 0 0 1rem; font-size: 0.9rem; }
+.admin-nav a { color: var(--muted); }
+.admin-nav a[aria-current="page"] { color: var(--text); font-weight: 600; }
+.hint { color: var(--muted); font-size: 0.875rem; font-weight: 400; }
+.admin-form { display: grid; gap: 0.75rem; max-width: 36rem; margin: 1rem 0 2rem; }
+.admin-form label { display: grid; gap: 0.3rem; font-weight: 600; }
+.admin-form input, .admin-form textarea, .admin-form button, .removed button, form > button {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.6rem;
+}
+.admin-form textarea { resize: vertical; }
+.admin-form button, .removed button, form > button { justify-self: start; cursor: pointer; font-weight: 600; }
+.admin-form.danger { border-top: 1px solid var(--border); padding-top: 1rem; }
+.admin-form.danger h2 { margin: 0; }
+.admin-album { display: flex; gap: 0.75rem; align-items: center; }
+.admin-album h1 { margin: 0; }
+.admin-album .meta, .removed .meta, .log .meta { color: var(--muted); font-size: 0.875rem; }
+.thumb { width: 48px; height: 48px; border-radius: 4px; flex: none; display: inline-block; background: var(--border); }
+.removed { list-style: none; padding: 0; margin: 0; }
+.removed li { display: flex; gap: 0.75rem; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+.removed .what { flex: 1; min-width: 0; }
+.removed .what .meta { display: block; }

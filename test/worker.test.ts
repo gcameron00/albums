@@ -5,7 +5,7 @@ import { escapeHtml } from "../src/html.ts";
 import { createTestDb } from "./helpers/d1.ts";
 import { kickApi, personalJesusApi, personalJesusPage, violatorApi, violatorPage } from "./fixtures/apple.ts";
 
-const ME: Identity = { email: "me@gcameron.com", serviceToken: null };
+const ME: Identity = { email: "owner@example.com", serviceToken: null };
 
 const API: Record<string, unknown> = {
   "/v1/catalog/ch/albums/665404621": violatorApi,
@@ -104,10 +104,10 @@ describe("admin access", () => {
   it("shows who is signed in", async () => {
     const res = await setup().run(get("/admin"));
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("Signed in as me@gcameron.com");
+    expect(await res.text()).toContain("Signed in as owner@example.com");
   });
 
-  it("refuses cross-site posts and non-JSON bodies", async () => {
+  it("refuses cross-site posts, forms from elsewhere and other bodies", async () => {
     const { run } = setup();
     const url = "https://music.apple.com/ch/album/violator/665404621";
     expect((await run(add({ url }, { "sec-fetch-site": "cross-site" }))).status).toBe(403);
@@ -116,7 +116,14 @@ describe("admin access", () => {
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: `url=${encodeURIComponent(url)}`,
     });
-    expect((await run(form)).status).toBe(415);
+    // Forms must come from this site.
+    expect((await run(form)).status).toBe(403);
+    const text = new Request("https://albums.gcameron.com/admin/albums", {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: url,
+    });
+    expect((await run(text)).status).toBe(415);
   });
 });
 

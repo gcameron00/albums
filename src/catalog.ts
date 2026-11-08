@@ -10,6 +10,10 @@ export const SORTS: Record<Sort, string> = {
   title: "Title",
 };
 
+export type Dir = "asc" | "desc";
+/** Direction each sort starts in: newest first, otherwise A–Z and oldest first. */
+export const DEFAULT_DIR: Record<Sort, Dir> = { added: "desc", artist: "asc", year: "asc", title: "asc" };
+
 export type View = "grid" | "list" | "play";
 const VIEWS: readonly View[] = ["grid", "list", "play"];
 
@@ -19,6 +23,7 @@ export interface ListQuery {
   genre: string;
   artist: string;
   sort: Sort;
+  dir: Dir;
   view: View;
   page: number;
 }
@@ -32,12 +37,15 @@ export function parseListQuery(params: URLSearchParams): ListQuery {
   const sort = params.get("sort") ?? "";
   const decade = Number(params.get("decade"));
   const page = Number(params.get("page"));
+  const sortKey: Sort = sort in SORTS ? (sort as Sort) : "added";
+  const dir = params.get("dir");
   return {
     q: (params.get("q") ?? "").trim().slice(0, 100),
     decade: Number.isInteger(decade) && decade >= 1900 && decade <= 2100 && decade % 10 === 0 ? decade : null,
     genre: (params.get("genre") ?? "").trim().slice(0, 100),
     artist: (params.get("artist") ?? "").trim().slice(0, 200),
-    sort: sort in SORTS ? (sort as Sort) : "added",
+    sort: sortKey,
+    dir: dir === "asc" || dir === "desc" ? dir : DEFAULT_DIR[sortKey],
     view: VIEWS.includes(params.get("view") as View) ? (params.get("view") as View) : "grid",
     page: Number.isInteger(page) && page >= 1 && page <= 10_000 ? page : 1,
   };
@@ -46,12 +54,15 @@ export function parseListQuery(params: URLSearchParams): ListQuery {
 /** The same query as URL parameters, leaving out defaults. */
 export function queryParams(q: ListQuery, change: Partial<ListQuery> = {}): URLSearchParams {
   const merged = { ...q, page: 1, ...change };
+  // A new sort starts in its own default direction unless one is given.
+  if (change.sort && !change.dir) merged.dir = DEFAULT_DIR[change.sort];
   const p = new URLSearchParams();
   if (merged.q) p.set("q", merged.q);
   if (merged.artist) p.set("artist", merged.artist);
   if (merged.decade) p.set("decade", String(merged.decade));
   if (merged.genre) p.set("genre", merged.genre);
   if (merged.sort !== "added") p.set("sort", merged.sort);
+  if (merged.dir !== DEFAULT_DIR[merged.sort]) p.set("dir", merged.dir);
   if (merged.view !== "grid") p.set("view", merged.view);
   if (merged.page > 1) p.set("page", String(merged.page));
   return p;
@@ -62,12 +73,19 @@ const like = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 /** Artist without a leading "The ", for sorting. */
 const ARTIST_KEY = "CASE WHEN artist LIKE 'The %' THEN substr(artist, 5) ELSE artist END COLLATE NOCASE";
 
-const ORDER: Record<Sort, string> = {
-  added: "added_at DESC, id DESC",
-  artist: `${ARTIST_KEY}, year, title COLLATE NOCASE`,
-  year: `year IS NULL, year, ${ARTIST_KEY}`,
-  title: "title COLLATE NOCASE, artist COLLATE NOCASE",
-};
+function orderBy(sort: Sort, dir: Dir): string {
+  const d = dir === "asc" ? "ASC" : "DESC";
+  switch (sort) {
+    case "added":
+      return `added_at ${d}, id ${d}`;
+    case "artist":
+      return `${ARTIST_KEY} ${d}, year, title COLLATE NOCASE`;
+    case "year":
+      return `year IS NULL, year ${d}, ${ARTIST_KEY}`;
+    case "title":
+      return `title COLLATE NOCASE ${d}, artist COLLATE NOCASE`;
+  }
+}
 
 function where(q: ListQuery): { sql: string; binds: Array<string | number> } {
   const parts = ["status = 'listed'"];
@@ -98,7 +116,7 @@ export async function listAlbums(db: D1Database, q: ListQuery): Promise<{ total:
   const [count, rows] = await Promise.all([
     db.prepare(`SELECT COUNT(*) AS n FROM albums WHERE ${w.sql}`).bind(...w.binds).first<{ n: number }>(),
     db
-      .prepare(`SELECT * FROM albums WHERE ${w.sql} ORDER BY ${ORDER[q.sort]} LIMIT ? OFFSET ?`)
+      .prepare(`SELECT * FROM albums WHERE ${w.sql} ORDER BY ${orderBy(q.sort, q.dir)} LIMIT ? OFFSET ?`)
       .bind(...w.binds, size, (q.page - 1) * size)
       .all<AlbumRow>(),
   ]);
@@ -168,4 +186,37 @@ export function publicAlbum(a: AlbumRow) {
     note: a.note,
     added_at: a.added_at,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Owner only
+
+export interface EventRow {
+  id: number;
+  album_id: number;
+  action: "added" | "removed" | "restored" | "edited";
+  at: string;
+  source: string;
+  detail: string | null;
+  title: string;
+  artist: string;
+  status: "listed" | "removed";
+}
+
+/** Removed albums, most recently removed first. */
+export async function removedAlbums(db: D1Database): Promise<AlbumRow[]> {
+  const rows = await db.prepare("SELECT * FROM albums WHERE status = 'removed' ORDER BY removed_at DESC, id DESC").all<AlbumRow>();
+  return rows.results ?? [];
+}
+
+/** The change log, newest first. */
+export async function recentEvents(db: D1Database, limit = 100): Promise<EventRow[]> {
+  const rows = await db
+    .prepare(
+      `SELECT e.id, e.album_id, e.action, e.at, e.source, e.detail, a.title, a.artist, a.status
+       FROM events e JOIN albums a ON a.id = e.album_id ORDER BY e.id DESC LIMIT ?`,
+    )
+    .bind(limit)
+    .all<EventRow>();
+  return rows.results ?? [];
 }

@@ -10,7 +10,7 @@ export function escapeHtml(value: string): string {
 export interface PageOptions {
   description?: string;
   /** Which nav item is current. */
-  nav?: "albums" | "about";
+  nav?: "albums" | "about" | "admin";
   /** Extra tags for <head>, already escaped. */
   head?: string;
   script?: string;
@@ -41,6 +41,7 @@ export function page(title: string, body: string, opts: PageOptions = {}): strin
         <a href="/"${current("albums")}>List</a>
         <a href="/random">Random</a>
         <a href="/about"${current("about")}>About</a>
+        <a href="/admin"${current("admin")}>Admin</a>
       </nav>
     </header>
     <main>

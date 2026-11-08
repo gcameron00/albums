@@ -71,6 +71,7 @@ describe("list page", () => {
     const html = await text("/");
     expect(titles(html)).toEqual(["Hopes and Fears", "Kick (Remastered)", "Violator", "Disintegration"]);
     expect(html).toContain("4 albums worth playing from start to finish");
+    expect(html).toContain('<a href="/admin">Admin</a>');
     expect(html).not.toContain("Gone");
     expect(html).toContain("https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/bb/cc/example/source/300x300bb.jpg");
   });
@@ -169,6 +170,7 @@ describe("list parameters", () => {
       genre: "",
       artist: "",
       sort: "added",
+      dir: "desc",
       view: "grid",
       page: 1,
     });
@@ -221,5 +223,27 @@ describe("players view and random", () => {
   it("links Play something with the current filters", async () => {
     const { text } = await setup();
     expect(await text("/?genre=Alternative&sort=year&view=list")).toContain('href="/random?genre=Alternative">Play something</a>');
+  });
+});
+
+describe("sortable list headings", () => {
+  it("sorts by a heading and reverses on a second click", async () => {
+    const { text } = await setup();
+    const asc = await text("/?view=list&sort=artist");
+    expect(asc).toContain('<th aria-sort="ascending"><a href="/?sort=artist&amp;dir=desc&amp;view=list">Artist');
+    expect(asc).toContain('<th><a href="/?sort=year&amp;view=list">Year</a></th>');
+    const desc = await text("/?view=list&sort=artist&dir=desc");
+    expect(titles(desc)).toEqual(["Hopes and Fears", "Kick (Remastered)", "Violator", "Disintegration"]);
+    expect(desc).toContain('<th aria-sort="descending"><a href="/?sort=artist&amp;view=list">Artist');
+    expect(titles(await text("/?view=list&sort=year&dir=desc"))).toEqual(["Hopes and Fears", "Violator", "Disintegration", "Kick (Remastered)"]);
+    expect(titles(await text("/?view=list&dir=asc"))).toEqual(["Disintegration", "Violator", "Kick (Remastered)", "Hopes and Fears"]);
+  });
+
+  it("keeps direction out of URLs when it is the default", () => {
+    const q = parseListQuery(new URLSearchParams("sort=year&dir=desc"));
+    expect(q.dir).toBe("desc");
+    expect(queryParams(q).toString()).toBe("sort=year&dir=desc");
+    expect(queryParams(q, { sort: "title" }).toString()).toBe("sort=title");
+    expect(queryParams(parseListQuery(new URLSearchParams("sort=added&dir=desc"))).toString()).toBe("");
   });
 });
