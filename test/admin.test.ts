@@ -60,6 +60,7 @@ describe("admin pages", () => {
     const html = await res.text();
     expect(html).toContain('<form class="admin-form" method="post" action="/admin/albums">');
     expect(html).toContain("Signed in as owner@example.com");
+    expect(html).toContain('<a href="/admin" aria-current="page">Admin</a>');
   });
 });
 

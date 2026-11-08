@@ -78,7 +78,7 @@ ${opts.error ? `      <p class="flash error" role="alert">${e(opts.error)}</p>\n
         <button type="submit">Add</button>
       </form>
       <p class="hint">Signed in as ${e(name)}.</p>`,
-    { head: ROBOTS },
+    { head: ROBOTS, nav: "admin" },
   );
 }
 
@@ -112,7 +112,7 @@ ${
       </form>`
     : ""
 }`,
-    { head: ROBOTS },
+    { head: ROBOTS, nav: "admin" },
   );
 }
 
@@ -168,7 +168,7 @@ ${events
 ${removedList}
       <h2>Changes</h2>
 ${log}`,
-    { head: ROBOTS },
+    { head: ROBOTS, nav: "admin" },
   );
 }
 

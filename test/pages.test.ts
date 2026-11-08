@@ -71,6 +71,7 @@ describe("list page", () => {
     const html = await text("/");
     expect(titles(html)).toEqual(["Hopes and Fears", "Kick (Remastered)", "Violator", "Disintegration"]);
     expect(html).toContain("4 albums worth playing from start to finish");
+    expect(html).toContain('<a href="/admin">Admin</a>');
     expect(html).not.toContain("Gone");
     expect(html).toContain("https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/bb/cc/example/source/300x300bb.jpg");
   });
