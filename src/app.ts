@@ -1,9 +1,10 @@
 import { addAlbum, describe, findByAppleId, restoreAlbum, SOURCES, type AlbumRow, type Source } from "./albums.ts";
-import { albumIdFor, fetchAlbum, LinkError, LookupError, parseAppleMusicLink } from "./apple.ts";
+import { albumIdFor, fetchAlbum, LinkError, LookupError, parseAppleMusicLink, type AppleSources } from "./apple.ts";
 import type { AuthEnv, Identity } from "./auth.ts";
+import type { MusicKeyEnv } from "./musicToken.ts";
 import { escapeHtml, page } from "./html.ts";
 
-export interface Env extends AuthEnv {
+export interface Env extends AuthEnv, MusicKeyEnv {
   DB: D1Database;
   ASSETS: Fetcher;
   STOREFRONT: string;
@@ -13,6 +14,7 @@ export interface Env extends AuthEnv {
 export interface Deps {
   verify(request: Request, env: Env): Promise<Identity | null>;
   fetch: typeof fetch;
+  musicToken(env: Env): Promise<string | null>;
   now(): Date;
 }
 
@@ -129,9 +131,10 @@ async function addFromLink(request: Request, env: Env, deps: Deps): Promise<Resp
 
   const storefront = env.STOREFRONT || "ch";
   const now = deps.now().toISOString();
+  const apple: AppleSources = { fetch: deps.fetch, musicToken: () => deps.musicToken(env) };
   try {
     const link = parseAppleMusicLink(body.url);
-    const albumId = await albumIdFor(link, storefront, deps.fetch);
+    const albumId = await albumIdFor(link, storefront, apple);
 
     // Known album: no need to ask Apple again.
     const existing = await findByAppleId(env.DB, albumId);
@@ -140,7 +143,7 @@ async function addFromLink(request: Request, env: Env, deps: Deps): Promise<Resp
         ? { outcome: "duplicate" as const, album: existing, summary: `Already on the list: ${describe(existing)}` }
         : existing
           ? await restoreAlbum(env.DB, existing, { note, source, now })
-          : await addAlbum(env.DB, await fetchAlbum(albumId, storefront, deps.fetch), { note, source, now });
+          : await addAlbum(env.DB, await fetchAlbum(albumId, storefront, apple), { note, source, now });
 
     return json(
       { outcome: result.outcome, summary: result.summary, album: publicAlbum(result.album) },

@@ -26,6 +26,12 @@ run_worker_first = true
 STOREFRONT = "ch"
 ACCESS_TEAM_DOMAIN = "grahamcameron.cloudflareaccess.com"
 ACCESS_AUD = "7294bf907a4cd878c6c00a12c2dc122b9405423afbd6a8b2b4ea8f5e6b4b216b"
+# Apple Music API (MusicKit key). Team ID and Key ID are not secret. The key
+# itself is the secret APPLE_MUSIC_KEY (wrangler secret put APPLE_MUSIC_KEY).
+# While any of the three is empty, albums are read from their
+# music.apple.com page instead (src/apple.ts).
+APPLE_TEAM_ID = ""
+APPLE_KEY_ID = ""
 
 # Created 2026-11-08 (location hint: WEUR). Migrations are applied by
 # `npm run deploy` before every production deploy.
@@ -45,6 +51,8 @@ ACCESS_TEAM_DOMAIN = "grahamcameron.cloudflareaccess.com"
 # Audience of the Access application that protects Preview URLs (Worker →
 # Settings → Domains & Routes → Preview URLs → Enable Cloudflare Access).
 ACCESS_AUD = "51696e9c66555c986386dff051146cb36ef051d5483181ec7bc971e878ef5253"
+APPLE_TEAM_ID = ""
+APPLE_KEY_ID = ""
 
 [[previews.d1_databases]]
 binding = "DB"

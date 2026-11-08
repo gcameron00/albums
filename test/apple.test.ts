@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { albumIdFromSongPage, isoDurationMs, LinkError, parseAlbumPage, parseAppleMusicLink, parseLookup } from "../src/apple.ts";
-import { kick, personalJesusPage, violator, violatorPage } from "./fixtures/lookup.ts";
+import {
+  albumIdFromSongPage,
+  isoDurationMs,
+  LinkError,
+  parseAlbumPage,
+  parseAppleMusicLink,
+  parseMusicApiAlbum,
+} from "../src/apple.ts";
+import { kickApi, personalJesusPage, violatorApi, violatorPage } from "./fixtures/apple.ts";
 
 describe("parseAppleMusicLink", () => {
   it("reads the example album links", () => {
@@ -56,9 +63,9 @@ describe("parseAppleMusicLink", () => {
   });
 });
 
-describe("parseLookup", () => {
-  it("builds the album from the collection and its tracks", () => {
-    const album = parseLookup(violator.results, "ch");
+describe("parseMusicApiAlbum", () => {
+  it("builds the album from the API response", () => {
+    const album = parseMusicApiAlbum(violatorApi, "ch");
     expect(album).toMatchObject({
       appleId: "665404621",
       title: "Violator",
@@ -77,11 +84,16 @@ describe("parseLookup", () => {
   });
 
   it("sorts tracks by disc and number", () => {
-    expect(parseLookup(kick.results, "ch").tracks.map((t) => t.title)).toEqual(["Guns in the Sky", "Need You Tonight"]);
+    expect(parseMusicApiAlbum(kickApi, "ch").tracks.map((t) => `${t.disc}.${t.number} ${t.title}`)).toEqual([
+      "1.1 Guns in the Sky",
+      "1.2 Need You Tonight",
+      "2.1 Bonus",
+    ]);
   });
 
   it("fails when there is no album in the answer", () => {
-    expect(() => parseLookup([], "ch")).toThrow(/not available in the CH Apple Music store/);
+    expect(() => parseMusicApiAlbum({ data: [] }, "ch")).toThrow(/not available in the CH Apple Music store/);
+    expect(() => parseMusicApiAlbum(null, "ch")).toThrow(/not available/);
   });
 });
 

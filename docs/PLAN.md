@@ -151,21 +151,26 @@ rejected.
 
 ### 4.2 Metadata
 
-`GET https://itunes.apple.com/lookup?id=<id>&entity=song&country=ch` — public,
-no key, returns the collection plus its tracks: name, artist, release date,
-genre, track count, `artworkUrl100` (rewritten to `{w}x{h}bb.jpg` for any
-size), `collectionViewUrl`. Everything uses the Swiss storefront (`ch`): an
-album not available there is rejected with a clear message, because its embed
-would not play. Nothing from Apple is stored beyond this metadata.
+Two sources, in order (`src/apple.ts`):
 
-**Fallback (2026-11-08):** the lookup API answers HTTP 403 with an empty body
-to requests from Cloudflare Workers, User-Agent or not. When it refuses, the
-Worker reads the album's `music.apple.com/ch/album/<id>?l=en-GB` page instead
-and takes the schema.org `MusicAlbum` JSON-LD (name, artist, date, genre,
-image, tracks with durations). Song links resolve through the song page's
-`inAlbum`. Disc numbers are not in the JSON-LD, so tracks are numbered in
-order on disc 1. If Apple also blocks the page, the next option is the Apple
-Music API with a MusicKit developer token.
+1. **Apple Music API** — `GET api.music.apple.com/v1/catalog/ch/albums/<id>`
+   (song links: `songs/<id>?include=albums`), with a developer token: an
+   ES256 JWT signed in the Worker from a MusicKit key (`src/musicToken.ts`,
+   12-hour tokens, cached). Gives name, artist, artist id, release date,
+   genres, track count, artwork URL template (`{w}x{h}`), canonical URL and
+   tracks with disc/track numbers and durations.
+2. **Album page** — when the key is not configured or the API refuses, the
+   Worker reads `music.apple.com/ch/album/<id>?l=en-GB` and takes the
+   schema.org `MusicAlbum` JSON-LD. No disc numbers there, so tracks are
+   numbered in order on disc 1.
+
+The free lookup API (`itunes.apple.com/lookup`) is not used: it answers
+HTTP 403 with an empty body to requests from Cloudflare Workers, with or
+without a User-Agent (2026-11-08).
+
+Everything uses the Swiss storefront (`ch`): an album not available there is
+rejected with a clear message, because its embed would not play. Nothing from
+Apple is stored beyond this metadata.
 
 No album type is stored. Whether a live album or compilation belongs on the
 list is my call when adding it.
