@@ -35,7 +35,7 @@ Cloudflare set-up for Phase 0:
    2026-11-08 (`b53e925c-…`, `934a0dc8-…`).
 2. Connect the repo in Workers Builds (README, *Deployment*). `deploy.yml`
    is deleted, so deploys cannot run twice.
-3. Access variables (`ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`) arrive in Phase 1
+3. Access variables (`ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`) added in Phase 1
    with the first write route.
 
 Shape of `wrangler.toml`:
@@ -55,9 +55,8 @@ run_worker_first = ["!/assets/*"]
 
 [vars]
 STOREFRONT = "ch"
-# Phase 1:
-# ACCESS_TEAM_DOMAIN = "grahamcameron.cloudflareaccess.com"
-# ACCESS_AUD = "<from the Access app>"
+ACCESS_TEAM_DOMAIN = "grahamcameron.cloudflareaccess.com"
+ACCESS_AUD = "<from the Access app>"
 
 [[d1_databases]]
 binding = "DB"
@@ -206,12 +205,13 @@ optional reason), Restore. No separate admin UI.
 
 - **Public**: every `GET` page and `GET /api/*`, listed albums only.
 - **Owner only**: `/admin/*` (all writes and the history page) and `/mcp`.
-- All writes live under `/admin/*`. A Cloudflare Access application covers
-  only `albums.gcameron.com/admin` and `/mcp` (the OAuth login, section 7);
-  everything else stays public. Policies:
-  - *Allow* me@gcameron.com with one-time PIN by email — browser. (Policy
-    configured by me in Zero Trust when we get to Phase 1.)
-  - *Service Auth* with a service token — the Shortcut.
+- All writes live under `/admin/*`. The Access application **Albums admin**
+  covers only `albums.gcameron.com/admin`; everything else stays public.
+  `/mcp` is *not* behind it: Claude calls `/mcp` with a token the Worker
+  issues, which Access would block (section 7). Policies (set up 2026-11-08):
+  - *Allow* me@gcameron.com, one-time PIN by email — browser.
+  - *Service Auth* with service token `albums-shortcut` — the Shortcut.
+    (Not *Bypass*: Bypass skips Access, so no JWT would reach the Worker.)
 - The Worker verifies `Cf-Access-Jwt-Assertion` (reuse `src/auth.ts` from
   `groceries`) on every write and fails closed if `ACCESS_AUD` is unset.
 - Public pages show edit controls only when a valid Access cookie/JWT is
@@ -230,9 +230,11 @@ Claude as a custom connector.
 
 Auth: claude.ai connectors expect OAuth. Use
 `@cloudflare/workers-oauth-provider` with Cloudflare Access as the upstream
-identity provider (Cloudflare's `remote-mcp-cf-access` pattern): Claude is
-sent to Access to log in, the Worker issues its own token, and only my email
-is accepted. Token state lives in a small KV namespace (plus a preview one).
+identity provider (Cloudflare's `remote-mcp-cf-access` pattern): an *Access
+for SaaS* (OIDC) application, separate from Albums admin. When the connector
+is added, Claude is sent to Access to log in with the PIN, the Worker checks
+the email is mine and issues its own token, and Claude then calls `/mcp` with
+that token. Token state lives in a small KV namespace (plus a preview one).
 
 Tools (MCP SDK via `agents` / `createMcpHandler`, stateless):
 
@@ -277,12 +279,12 @@ filters.
 
 | Phase | Scope | Done when |
 | --- | --- | --- |
-| 0 | Repo fixes (section 2), D1 prod + preview, Workers Builds, CI, empty `/health` | A branch push gives a preview URL; `main` deploys to albums.gcameron.com |
-| 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled |
+| 0 | Repo fixes (section 2), D1 prod + preview, Workers Builds, CI, empty `/health` | A branch push gives a preview URL; `main` deploys to albums.gcameron.com. **Done** |
+| 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled. **Code done**; to verify on a preview |
 | 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop |
 | 3 | Play view with lazy Apple Music embeds; `/random` | Albums play in place |
 | 4 | Signed-in UI: add box, edit, remove, restore; `/admin/history` | Full lifecycle from the browser |
-| 5 | iOS Shortcut + docs/SHORTCUT.md | Share from Music app → notification "Added: …" |
+| 5 | iOS Shortcut ([docs/SHORTCUT.md](SHORTCUT.md), drafted in Phase 1) | Share from Music app → notification "Added: …" |
 | 6 | MCP server + OAuth via Access; connector added in Claude | Claude can search, pick and add albums |
 | 7 | Nice-to-haves: import from examples or an Apple Music playlist, stats page, artwork colour accents, Last.fm "last played" | — |
 
