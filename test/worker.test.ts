@@ -17,6 +17,7 @@ function setup(opts: { who?: Identity | null; answers?: Record<string, unknown> 
     ACCESS_AUD: "aud",
   };
   const lookups: string[] = [];
+  const userAgents: Array<string | null> = [];
   const answers = opts.answers ?? {
     "665404621": violator,
     "665404702": personalJesusSong,
@@ -24,8 +25,9 @@ function setup(opts: { who?: Identity | null; answers?: Record<string, unknown> 
   };
   const deps: Deps = {
     verify: async () => (opts.who === undefined ? ME : opts.who),
-    fetch: (async (input: RequestInfo | URL) => {
+    fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
+      userAgents.push(new Headers(init?.headers).get("user-agent"));
       lookups.push(url.search);
       const id = url.searchParams.get("id") ?? "";
       return Response.json(answers[id] ?? empty);
@@ -33,7 +35,7 @@ function setup(opts: { who?: Identity | null; answers?: Record<string, unknown> 
     now: () => new Date("2026-11-08T16:00:00Z"),
   };
   const run = (req: Request) => handle(req, env, deps);
-  return { run, sqlite, lookups };
+  return { run, sqlite, lookups, userAgents };
 }
 
 const get = (path: string) => new Request(`https://albums.gcameron.com${path}`);
@@ -93,7 +95,7 @@ describe("admin access", () => {
 
 describe("POST /admin/albums", () => {
   it("adds an album with its tracks and an event", async () => {
-    const { run, sqlite, lookups } = setup();
+    const { run, sqlite, lookups, userAgents } = setup();
     const res = await run(
       add({ url: "https://music.apple.com/ch/album/violator/665404621?l=en-GB", note: "  Side two!  ", source: "shortcut" }),
     );
@@ -103,6 +105,7 @@ describe("POST /admin/albums", () => {
     expect(body.summary).toBe("Added: Depeche Mode – Violator (1990)");
     expect(body.album).toMatchObject({ title: "Violator", year: 1990, note: "Side two!" });
     expect(lookups).toEqual(["?id=665404621&country=ch&entity=song"]);
+    expect(userAgents).toEqual(["albums.gcameron.com/1.0 (+https://albums.gcameron.com)"]);
 
     expect(sqlite.prepare("SELECT COUNT(*) AS n FROM tracks").get()).toEqual({ n: 9 });
     expect(sqlite.prepare("SELECT action, source, at FROM events").all()).toEqual([

@@ -92,6 +92,15 @@ const idOf = (o: Json, k: string): string | null => {
   return typeof v === "number" || (typeof v === "string" && /^\d+$/.test(v)) ? String(v) : null;
 };
 
+/**
+ * Workers send no User-Agent by default, and Apple's lookup API answers 403
+ * to requests without one. Identify the site plainly.
+ */
+const LOOKUP_HEADERS = {
+  accept: "application/json",
+  "user-agent": "albums.gcameron.com/1.0 (+https://albums.gcameron.com)",
+};
+
 async function lookup(
   fetchFn: typeof fetch,
   id: string,
@@ -105,11 +114,16 @@ async function lookup(
 
   let res: Response;
   try {
-    res = await fetchFn(url.toString(), { headers: { accept: "application/json" } });
-  } catch {
+    res = await fetchFn(url.toString(), { headers: LOOKUP_HEADERS });
+  } catch (error) {
+    console.error("Apple lookup unreachable", url.toString(), String(error));
     throw new LookupError("Apple Music could not be reached. Try again.", 502);
   }
-  if (!res.ok) throw new LookupError(`Apple Music lookup failed (HTTP ${res.status}).`, 502);
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    console.error("Apple lookup refused", url.toString(), res.status, detail);
+    throw new LookupError(`Apple Music lookup failed (HTTP ${res.status}).`, 502);
+  }
   let body: unknown;
   try {
     body = await res.json();
