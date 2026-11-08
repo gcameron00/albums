@@ -213,10 +213,9 @@ when an Access session cookie is present.
 
 - **Public**: every `GET` page and `GET /api/*`, listed albums only.
 - **Owner only**: `/admin/*` (all writes and the history page) and `/mcp`.
-- All writes live under `/admin/*`. The Access application **Albums admin**
-  covers only `albums.gcameron.com/admin`; everything else stays public.
-  `/mcp` is *not* behind it: Claude calls `/mcp` with a token the Worker
-  issues, which Access would block (section 7). Policies (set up 2026-11-08):
+- The Access application **Albums admin** covers `albums.gcameron.com/admin`
+  and `/mcp` (with Managed OAuth for MCP clients, section 7); everything else
+  stays public. Policies (set up 2026-11-08):
   - *Allow* me@gcameron.com, one-time PIN by email — browser.
   - *Service Auth* with service token `albums-shortcut` — the Shortcut.
     (Not *Bypass*: Bypass skips Access, so no JWT would reach the Worker.)
@@ -238,54 +237,65 @@ The Shortcut posts to `/admin/albums`.
 ## 7. MCP server
 
 Remote MCP over Streamable HTTP at `https://albums.gcameron.com/mcp`, added in
-Claude as a custom connector.
+Claude as a custom connector. Implemented in `src/mcp.ts` without an SDK:
+stateless JSON-RPC, one message per POST, JSON responses (no SSE stream),
+notifications answered with 202.
 
-Auth: claude.ai connectors expect OAuth. Use
-`@cloudflare/workers-oauth-provider` with Cloudflare Access as the upstream
-identity provider (Cloudflare's `remote-mcp-cf-access` pattern): an *Access
-for SaaS* (OIDC) application, separate from Albums admin. When the connector
-is added, Claude is sent to Access to log in with the PIN, the Worker checks
-the email is mine and issues its own token, and Claude then calls `/mcp` with
-that token. Token state lives in a small KV namespace (plus a preview one).
+**Auth: Cloudflare Access Managed OAuth** (decided 2026-11-08, as in
+`add-blog`'s `docs/mcp.md`). `/mcp` is a second path on the **Albums admin**
+Access application, with Managed OAuth on and
+`https://claude.ai/api/mcp/auth_callback` allow-listed. Access answers
+unauthenticated calls with 401 and its own resource metadata, handles client
+registration, PKCE and tokens, and forwards its usual JWT; `src/app.ts`
+verifies it like any `/admin` request and requires an email (no service
+tokens). No OAuth code, dependency or KV in the Worker. (A first version used
+`@cloudflare/workers-oauth-provider` with KV and a consent page; dropped
+before merge in favour of the proven add-blog set-up.) If Managed OAuth does
+not work on a path-based app, `/mcp` gets its own Access app and its audience
+tag joins `ACCESS_AUD` (comma-separated).
 
-Tools (MCP SDK via `agents` / `createMcpHandler`, stateless):
+Tools (all owner-only; the token implies the owner):
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
-| `search_albums` | read | Text search over artist and title; filters for year range, decade, genre, status. |
-| `list_albums` | read | Paged list with sort (added, artist, year). |
-| `get_album` | read | Full record with note, events, links. |
-| `random_album` | read | One (or n) random listed albums, optional filters ("something from the 80s"). |
-| `list_history` | read | Removals/restores/edits, newest first. |
-| `get_stats` | read | Counts by decade, genre, artist; total running time; additions per month. |
-| `add_album` | write | From an Apple Music URL, optional note. |
-| `remove_album` | write | By id, optional reason. |
-| `restore_album` | write | By id. |
-| `update_album` | write | Edit the note. |
+| `search_albums` | read | Artist/title words, exact artist, decade, genre; sort and direction; 200 per page with total. |
+| `get_album` | read | One album by id, including removed ones (status, removal date and reason). |
+| `random_album` | read | 1–10 random listed albums, same filters ("something from the 80s"). |
+| `get_stats` | read | Totals, length, by decade, by genre, artists with several albums, additions per month. |
+| `list_history` | read | Removed albums with reasons, and the latest changes. |
+| `add_album` | write | From an Apple Music album or song link, optional note; duplicate/restore handled. |
+| `update_note` | write | Set or clear the public note. |
+| `remove_album` | write | Off the list into the private history, optional reason. |
+| `restore_album` | write | Put a removed album back. |
 
-Also expose the list as an MCP **resource** (`albums://list`) for clients that
-prefer resources. Responses include `apple_url`, so Claude can hand an album
-to the Sonos connector (`play_album`) or look it up on Last.fm.
+Results come as JSON text plus `structuredContent`. Each album includes
+`apple_url` and its page URL, so Claude can hand it to the Sonos connector
+(`play_album`) or look it up on Last.fm. Writes are logged with source `mcp`.
 
 ## 8. Code layout
 
 ```
 src/
-  index.ts        router (fetch), assets fallthrough
+  index.ts        Worker entry
+  app.ts          router: site, public API, /admin, /mcp
+  http.ts         responses, body reading, same-origin checks
   auth.ts         Access JWT verification (from groceries)
-  apple.ts        link parsing, iTunes lookup
-  db.ts           queries
+  apple.ts        link parsing, Apple Music API and album-page fallback
+  musicToken.ts   Apple Music developer token (MusicKit key)
   albums.ts       add/remove/restore/edit logic shared by web, Shortcut, MCP
-  pages/*.ts      HTML templates (grid, list, play, album, about, admin history)
-  mcp.ts          MCP tools + OAuth provider wiring
-migrations/0001_init.sql
-public/assets/... css, js, favicon
-test/             vitest (link parsing, lookup fixtures, routes, auth)
-docs/PLAN.md, docs/SHORTCUT.md
+  catalog.ts      read queries (list, filters, random, history)
+  pages.ts        public HTML pages
+  admin.ts        owner pages and writes under /admin
+  mcp.ts          MCP JSON-RPC server and tools
+  format.ts, html.ts
+migrations/       D1 schema
+public/assets/    CSS, JS, favicon
+test/             vitest (in-memory SQLite D1, hand-written Apple fixtures)
+docs/             PLAN.md, SHORTCUT.md
 ```
 
-No front-end framework: one small `app.js` for the add box, lazy embeds and
-filters.
+No front-end framework: one small `filters.js` applies list filters as they
+change.
 
 ## 9. Build order
 
@@ -295,9 +305,9 @@ filters.
 | 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled. **Done** (Shortcut verified 2026-11-08) |
 | 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop. **Done** |
 | 3 | Play view with lazy Apple Music embeds; `/random` | Albums play in place. **Done** |
-| 4 | Signed-in UI: add box, edit, remove, restore; `/admin/history`; list view sortable by column heading | Full lifecycle from the browser. **Code done** |
-| 5 | iOS Shortcut ([docs/SHORTCUT.md](SHORTCUT.md), drafted in Phase 1) | Share from Music app → notification "Added: …" |
-| 6 | MCP server + OAuth via Access; connector added in Claude | Claude can search, pick and add albums |
+| 4 | Signed-in UI: add box, edit, remove, restore; `/admin/history`; list view sortable by column heading | Full lifecycle from the browser. **Done** |
+| 5 | iOS Shortcut ([docs/SHORTCUT.md](SHORTCUT.md)) — **Done** | Share from Music app → notification "Added: …" |
+| 6 | MCP server + OAuth via Access; connector added in Claude | Claude can search, pick and add albums. **Code done** |
 | 7 | Nice-to-haves: import from examples or an Apple Music playlist, stats page, artwork colour accents, Last.fm "last played" | — |
 
 ## 10. Decisions (2026-11-08)

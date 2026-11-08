@@ -19,9 +19,11 @@ directory = "public"
 binding = "ASSETS"
 run_worker_first = true
 
-# Access application "Albums admin" protects albums.gcameron.com/admin
-# (one-time PIN for me, Service Auth for the Shortcut). Neither value is
-# secret. The Worker refuses every /admin request if either is empty.
+# Access application "Albums admin" protects albums.gcameron.com/admin and
+# /mcp (one-time PIN for me, Service Auth for the Shortcut, Managed OAuth for
+# MCP clients). Neither value is secret. The Worker refuses every /admin and
+# /mcp request if either is empty. ACCESS_AUD may list several audience tags,
+# comma-separated, if /mcp ever needs an Access application of its own.
 [vars]
 STOREFRONT = "ch"
 ACCESS_TEAM_DOMAIN = "grahamcameron.cloudflareaccess.com"

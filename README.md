@@ -53,8 +53,10 @@ deployment set-up and the build order.
   remove with a private reason), private history with *Put back*; list view
   sortable by column heading.
 
-Next: Phase 6, the MCP server (Phase 5, the Shortcut, already works). See
-[docs/PLAN.md](docs/PLAN.md), section 9.
+- **Phase 6** (MCP): `/mcp` for Claude, behind Access with Managed OAuth.
+  See [Connecting Claude](#connecting-claude).
+
+Next: nice-to-haves (Phase 7). See [docs/PLAN.md](docs/PLAN.md), section 9.
 
 ## Routes
 
@@ -73,6 +75,7 @@ Next: Phase 6, the MCP server (Phase 5, the Shortcut, already works). See
 | `/admin/albums/:id/remove` | POST | Access | Remove from the list, with an optional private `reason` |
 | `/admin/albums/:id/restore` | POST | Access | Put a removed album back |
 | `/admin/history` | GET | Access | Removed albums with reasons and *Put back*, and the change log |
+| `/mcp` | POST | Access (Managed OAuth) | MCP server (see [Connecting Claude](#connecting-claude)) |
 
 Owner writes take a form posted from these pages (answered with a redirect)
 or JSON (answered with JSON). Forms must come from this site
@@ -80,6 +83,40 @@ or JSON (answered with JSON). Forms must come from this site
 *Edit* link when the browser has a Cloudflare Access session cookie.
 
 Removed albums never appear on public pages or in the API.
+
+## Connecting Claude
+
+The site is an MCP server at `https://albums.gcameron.com/mcp`, behind the
+**Albums admin** Access application with **Managed OAuth**: Access runs the
+OAuth flow for Claude (sign-in with the one-time PIN), checks Claude's token
+at the edge and forwards its usual JWT, which the Worker verifies exactly as
+for `/admin`. Same set-up as `add-blog` (its `docs/mcp.md`).
+
+One-time set-up in Zero Trust → Access → Applications → **Albums admin**:
+
+1. Add a second destination: `albums.gcameron.com` with path `mcp`.
+2. Turn on **Managed OAuth**.
+3. Under Managed OAuth → **Allowed redirect URIs**, add
+   `https://claude.ai/api/mcp/auth_callback`. Without it, adding the
+   connector fails with "Couldn't register…" before any sign-in page.
+   (Claude Code and Claude Desktop use a loopback redirect instead, covered by
+   the "allow localhost/loopback clients" setting.)
+
+Then in Claude: **Settings → Connectors → Add custom connector**, name
+`Albums`, URL `https://albums.gcameron.com/mcp`, no client ID or secret.
+**Connect** opens Access; sign in with the PIN. Enable the connector in a
+chat and ask, for example, "pick an album from the 80s", "what's on my list
+by INXS?", or "add this: https://music.apple.com/ch/album/…".
+
+Tools: `search_albums`, `get_album`, `random_album`, `get_stats`,
+`list_history`, `add_album`, `update_note`, `remove_album`, `restore_album`
+(details in [docs/PLAN.md](docs/PLAN.md), section 7). Changes made through
+Claude show as `mcp` in the history. `/mcp` refuses service tokens: only a
+person can connect. Connections are revoked in the Zero Trust dashboard.
+
+If Managed OAuth turns out not to work on a path-based application, give
+`/mcp` an Access application of its own (same policy, Managed OAuth on) and
+add its audience tag to `ACCESS_AUD` in `wrangler.toml`, comma-separated.
 
 ## Deployment
 

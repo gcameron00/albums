@@ -2,6 +2,7 @@ import { admin } from "./admin.ts";
 import type { AuthEnv, Identity } from "./auth.ts";
 import { facets, getAlbum, listAlbums, moreByArtist, pageSize, parseListQuery, publicAlbum, queryParams, randomAlbum } from "./catalog.ts";
 import { html, json, SECURITY_HEADERS } from "./http.ts";
+import { mcp } from "./mcp.ts";
 import type { MusicKeyEnv } from "./musicToken.ts";
 import { aboutPage, ALBUM_MESSAGES, albumPage, listPage, notFoundPage } from "./pages.ts";
 
@@ -95,6 +96,15 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
 
   if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
     return admin(request, env, deps, url);
+  }
+
+  // MCP for Claude. Cloudflare Access (Managed OAuth) checks the client's
+  // token at the edge and forwards its usual JWT; it must name a person.
+  if (url.pathname === "/mcp") {
+    const who = await deps.verify(request, env);
+    if (!who) return json({ error: "Not signed in." }, 401);
+    if (!who.email) return json({ error: "MCP needs a person signed in, not a service token." }, 403);
+    return mcp(request, env, deps, { email: who.email });
   }
 
   if (method === "GET" || method === "HEAD") {

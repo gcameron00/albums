@@ -176,7 +176,7 @@ ${log}`,
 // Actions
 
 /** Adds from an Apple Music link, reports a duplicate, or restores a removed album. */
-async function addFromLink(env: Env, deps: Deps, link: string, note: string | null, source: Source): Promise<AddResult> {
+export async function addFromLink(env: Env, deps: Deps, link: string, note: string | null, source: Source): Promise<AddResult> {
   const storefront = env.STOREFRONT || "ch";
   const now = deps.now().toISOString();
   const apple: AppleSources = { fetch: deps.fetch, musicToken: () => deps.musicToken(env) };
