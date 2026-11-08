@@ -1,14 +1,13 @@
 # Plan
 
-Draft, 2026-11-08. Assumptions are marked **(assumed)** and are open
-questions until confirmed (section 10).
+Draft, 2026-11-08. Decisions so far are in section 10.
 
 ## 1. Goals
 
 - One canonical list of "play it start to finish" albums, easy to add to from
   the phone in a couple of taps.
 - Pleasant to browse for anyone; playable in place via Apple Music embeds.
-- Removals are not lost: they go to a history list and can be restored.
+- Removals are not lost: they go to a private history list and can be restored.
 - Claude can read the list (and, for me, change it) over MCP.
 - Same Cloudflare patterns as `groceries`: one Worker, D1, Access, separate
   preview database.
@@ -22,21 +21,22 @@ What is wrong today:
 
 | Problem | Fix |
 | --- | --- |
-| `wrangler.toml` says `name = "generic-website"`; the deploy workflow papers over it with `--name ${{ github.event.repository.name }}`. | `name = "albums"` (matches the deployed Worker). Done in this branch; `--name` dropped from the workflow. |
+| `wrangler.toml` says `name = "generic-website"`; the deploy workflow papers over it with `--name ${{ github.event.repository.name }}`. | `name = "albums"` (matches the deployed Worker). Done. |
 | `[assets] directory = "."` publishes the whole repo, which is why `.assetsignore` has to exclude `node_modules`, `package.json`, `wrangler.toml` etc. | Move static files to `public/` and point `[assets]` there. `.assetsignore` goes away. |
 | No Worker code (`main`), so no D1, no API. | Add `src/index.ts` as `main`, with `run_worker_first` for everything except `/assets/*`. |
-| No previews. The workflow only runs on `main`. | Use **Workers Builds** (Cloudflare's Git integration), as `groceries` does: production build on `main` runs `npm run deploy`; non-production branches run `npm run preview` (`wrangler preview`) with `preview_urls = true` and a `[previews]` block bound to `albums-preview`. **(assumed)** — the alternative is to keep GitHub Actions and add a `wrangler versions upload` job for branches. |
+| No previews. The workflow only runs on `main`. | Use **Workers Builds** (Cloudflare's Git integration), as `groceries` does: production build on `main` runs `npm run deploy`; non-production branches run `npm run preview` (`wrangler preview`) with `preview_urls = true` and a `[previews]` block bound to `albums-preview`. |
 | `workers_dev = true` exposes an unprotected URL once Access is in front of the custom domain. | `workers_dev = false`; custom domain `albums.gcameron.com` declared in `routes`. |
 | Placeholder `index.html` / `about/`. | Replaced by Worker-rendered pages. |
 | No tests or CI. | `ci.yml`: `npm ci`, `tsc --noEmit`, `vitest run` on PRs and `main`. |
 
 Cloudflare set-up for Phase 0:
 
-1. Create D1 `albums` and `albums-preview` (location hint WEUR).
-2. Connect the repo in Workers Builds; disable `deploy.yml` (keep as
-   `workflow_dispatch` only, or delete) so deploys don't run twice.
-3. Add `CLOUDFLARE_*` build variables only if Workers Builds needs them (it
-   normally does not).
+1. ~~Create D1 `albums` and `albums-preview` (location hint WEUR).~~ Done
+   2026-11-08 (`b53e925c-…`, `934a0dc8-…`).
+2. Connect the repo in Workers Builds (README, *Deployment*). `deploy.yml`
+   is deleted, so deploys cannot run twice.
+3. Access variables (`ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`) arrive in Phase 1
+   with the first write route.
 
 Shape of `wrangler.toml`:
 
@@ -54,9 +54,10 @@ binding = "ASSETS"
 run_worker_first = ["!/assets/*"]
 
 [vars]
-ACCESS_TEAM_DOMAIN = "grahamcameron.cloudflareaccess.com"
-ACCESS_AUD = "<from the Access app>"
 STOREFRONT = "ch"
+# Phase 1:
+# ACCESS_TEAM_DOMAIN = "grahamcameron.cloudflareaccess.com"
+# ACCESS_AUD = "<from the Access app>"
 
 [[d1_databases]]
 binding = "DB"
@@ -95,12 +96,11 @@ CREATE TABLE albums (
   duration_ms   INTEGER,                   -- sum of track lengths
   artwork_url   TEXT,                      -- template; size set at render
   apple_url     TEXT NOT NULL,             -- canonical album link
-  kind          TEXT NOT NULL DEFAULT 'studio', -- studio | live | compilation | ep | soundtrack | other
-  note          TEXT,                      -- why it is on the list (optional)
+  note          TEXT,                      -- why it is on the list (optional, public)
   status        TEXT NOT NULL DEFAULT 'listed', -- listed | removed
   added_at      TEXT NOT NULL,
   removed_at    TEXT,
-  removed_reason TEXT,
+  removed_reason TEXT,                     -- private
   source        TEXT NOT NULL              -- web | shortcut | mcp | import
 );
 CREATE INDEX albums_status_artist ON albums(status, artist);
@@ -126,7 +126,7 @@ CREATE TABLE events (                    -- append-only audit/history
 ```
 
 - Removing sets `status = 'removed'` and writes an event; the row stays.
-  Restoring flips it back. The History page reads `events`, so an album
+  Restoring flips it back. The (owner-only) History page reads `events`, so an album
   removed, restored and removed again shows all three.
 - Adding an album that already exists: `listed` → "Already on the list";
   `removed` → offer to restore (Shortcut: restores and says so).
@@ -140,8 +140,9 @@ CREATE TABLE events (                    -- append-only audit/history
 Accepted inputs (all from Apple Music share sheets or the browser):
 
 - `https://music.apple.com/ch/album/rumours/594061854`
-- `https://music.apple.com/gb/album/rumours/594061854?i=594061862` (a track;
-  the album is the path id)
+- `https://music.apple.com/ch/album/rumours/594061854?i=594061862` (a track;
+  the album is the path id; links from other storefronts such as `gb` are
+  accepted too, since the id is the same everywhere)
 - `https://music.apple.com/ch/song/dreams/594061862` (resolve via lookup →
   `collectionId`)
 - `https://geo.music.apple.com/...` and `itunes.apple.com/...` variants
@@ -154,20 +155,17 @@ rejected.
 `GET https://itunes.apple.com/lookup?id=<id>&entity=song&country=ch` — public,
 no key, returns the collection plus its tracks: name, artist, release date,
 genre, track count, `artworkUrl100` (rewritten to `{w}x{h}bb.jpg` for any
-size), `collectionViewUrl`. If the album is not in the CH storefront, retry
-with `gb`, then `us`. Nothing from Apple is stored beyond this metadata.
+size), `collectionViewUrl`. Everything uses the Swiss storefront (`ch`): an
+album not available there is rejected with a clear message, because its embed
+would not play. Nothing from Apple is stored beyond this metadata.
 
-`kind` defaults to `studio`. The Worker proposes `live` / `compilation` /
-`ep` / `soundtrack` from cues (title contains "Live", "Greatest Hits",
-"Best of", " - EP", "Original Soundtrack"; track count ≤ 6; genre
-"Soundtrack") and the add form shows the suggestion so I can confirm or keep
-it as an exception. The Shortcut accepts the proposal; it can be corrected on
-the site later.
+No album type is stored. Whether a live album or compilation belongs on the
+list is my call when adding it.
 
 ### 4.3 On the site
 
 Signed-in only: an **Add** box on `/` (paste link → preview card with artwork,
-kind and optional note → Save).
+optional note → Save).
 
 ### 4.4 iOS Shortcut
 
@@ -190,28 +188,29 @@ Public pages, server-rendered, light/dark, works on a phone.
 
 | Route | What |
 | --- | --- |
-| `/` | Artwork grid (default view). Sort: recently added, artist, year, title. Filters: decade, genre, kind. Search box (artist/title/track). Count in header. |
+| `/` | Artwork grid (default view). Sort: recently added, artist, year, title. Filters: decade, genre. Search box (artist/title/track). Count in header. |
 | `/?view=list` | Compact table: artist, title, year, genre, length, added. Good for scanning a long list. |
 | `/?view=play` | Apple Music embed per album (`https://embed.music.apple.com/ch/album/<id>`). Iframes are heavy, so 12 per page and lazy-loaded (`loading="lazy"`, real iframe swapped in on scroll/click). |
-| `/albums/:id` | One album: big artwork, the embed player, track list, note, kind, added date, links to Apple Music and to the artist's other listed albums. |
+| `/albums/:id` | One album: big artwork, the embed player, track list, note, added date, links to Apple Music and to the artist's other listed albums. |
 | `/artists/:artistId` | Listed albums by one artist. |
 | `/random` | Redirects to a random listed album ("what shall I play?"). |
-| `/history` | Removed albums and the change log, newest first. Restore button when signed in. |
 | `/about` | What the list is and the rule for getting on it. |
-| `/api/albums`, `/api/albums/:id`, `/api/history` | Same data as JSON (public, read-only). |
+| `/api/albums`, `/api/albums/:id` | Same data as JSON (public, read-only; listed albums only, no removal data). |
+| `/admin/history` | **Owner only.** Removed albums (with reasons) and the change log, newest first, with Restore buttons. |
 
-Signed-in extras on the same pages: Add box, Edit (kind, note), Remove (with
+Removed albums are not shown anywhere public (a removed album's page returns
+404). Signed-in extras on the same pages: Add box, Edit note, Remove (with
 optional reason), Restore. No separate admin UI.
 
 ## 6. Access control
 
-- **Public**: every `GET` page and `GET /api/*`.
-- **Owner only**: `POST/PATCH/DELETE /api/*`, `/admin/*` (login landing page),
-  `/mcp`.
+- **Public**: every `GET` page and `GET /api/*`, listed albums only.
+- **Owner only**: `/admin/*` (all writes and the history page) and `/mcp`.
 - All writes live under `/admin/*`. A Cloudflare Access application covers
   only `albums.gcameron.com/admin` and `/mcp` (the OAuth login, section 7);
   everything else stays public. Policies:
-  - *Allow* my email (one-time PIN or Google login) — browser.
+  - *Allow* me@gcameron.com with one-time PIN by email — browser. (Policy
+    configured by me in Zero Trust when we get to Phase 1.)
   - *Service Auth* with a service token — the Shortcut.
 - The Worker verifies `Cf-Access-Jwt-Assertion` (reuse `src/auth.ts` from
   `groceries`) on every write and fails closed if `ACCESS_AUD` is unset.
@@ -220,8 +219,8 @@ optional reason), Restore. No separate admin UI.
 - Preview URLs get their own Access app (as in `groceries`) so preview data and
   write routes are not open.
 
-Resulting write routes: `POST /admin/albums` (add), `PATCH /admin/albums/:id`
-(edit), `POST /admin/albums/:id/remove`, `POST /admin/albums/:id/restore`.
+Resulting owner routes: `GET /admin/history`, `POST /admin/albums` (add),
+`PATCH /admin/albums/:id` (edit note), `POST /admin/albums/:id/remove`, `POST /admin/albums/:id/restore`.
 The Shortcut posts to `/admin/albums`.
 
 ## 7. MCP server
@@ -233,23 +232,22 @@ Auth: claude.ai connectors expect OAuth. Use
 `@cloudflare/workers-oauth-provider` with Cloudflare Access as the upstream
 identity provider (Cloudflare's `remote-mcp-cf-access` pattern): Claude is
 sent to Access to log in, the Worker issues its own token, and only my email
-is accepted. Token state lives in a small KV namespace. **(assumed)** — the
-alternative is a Cloudflare MCP Server Portal in front of the Worker.
+is accepted. Token state lives in a small KV namespace (plus a preview one).
 
 Tools (MCP SDK via `agents` / `createMcpHandler`, stateless):
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
-| `search_albums` | read | Text search over artist, title, track names; filters for year range, decade, genre, kind, status. |
+| `search_albums` | read | Text search over artist, title, track names; filters for year range, decade, genre, status. |
 | `list_albums` | read | Paged list with sort (added, artist, year). |
 | `get_album` | read | Full record with tracks, note, events, links. |
 | `random_album` | read | One (or n) random listed albums, optional filters ("something from the 80s"). |
 | `list_history` | read | Removals/restores/edits, newest first. |
-| `get_stats` | read | Counts by decade, genre, kind, artist; total running time; additions per month. |
-| `add_album` | write | From an Apple Music URL, optional note and kind. |
+| `get_stats` | read | Counts by decade, genre, artist; total running time; additions per month. |
+| `add_album` | write | From an Apple Music URL, optional note. |
 | `remove_album` | write | By id, optional reason. |
 | `restore_album` | write | By id. |
-| `update_album` | write | Kind and note. |
+| `update_album` | write | Edit the note. |
 
 Also expose the list as an MCP **resource** (`albums://list`) for clients that
 prefer resources. Responses include `apple_url`, so Claude can hand an album
@@ -261,10 +259,10 @@ to the Sonos connector (`play_album`) or look it up on Last.fm.
 src/
   index.ts        router (fetch), assets fallthrough
   auth.ts         Access JWT verification (from groceries)
-  apple.ts        link parsing, iTunes lookup, kind heuristics
+  apple.ts        link parsing, iTunes lookup
   db.ts           queries
   albums.ts       add/remove/restore/edit logic shared by web, Shortcut, MCP
-  pages/*.ts      HTML templates (grid, list, play, album, history, about)
+  pages/*.ts      HTML templates (grid, list, play, album, about, admin history)
   mcp.ts          MCP tools + OAuth provider wiring
 migrations/0001_init.sql
 public/assets/... css, js, favicon
@@ -283,24 +281,20 @@ filters.
 | 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled |
 | 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop |
 | 3 | Play view with lazy Apple Music embeds; `/random` | Albums play in place |
-| 4 | Signed-in UI: add box, edit, remove, restore; `/history` | Full lifecycle from the browser |
+| 4 | Signed-in UI: add box, edit, remove, restore; `/admin/history` | Full lifecycle from the browser |
 | 5 | iOS Shortcut + docs/SHORTCUT.md | Share from Music app → notification "Added: …" |
 | 6 | MCP server + OAuth via Access; connector added in Claude | Claude can search, pick and add albums |
-| 7 | Nice-to-haves: import from an Apple Music playlist or CSV, stats page, artwork colour accents, Last.fm "last played" | — |
+| 7 | Nice-to-haves: import from examples or an Apple Music playlist, stats page, artwork colour accents, Last.fm "last played" | — |
 
-## 10. Open questions
+## 10. Decisions (2026-11-08)
 
-1. **Deploys**: move to Workers Builds like `groceries` (recommended), or keep
-   GitHub Actions and add a preview job?
-2. **Storefront**: links and embeds from the Swiss store (`ch`), or `gb`?
-   Availability differs slightly between them.
-3. **Starting list**: is there an existing list to import (an Apple Music
-   playlist, a note, a spreadsheet)?
-4. **Notes and ordering**: a short "why it's here" note per album — public or
-   private? Any ranking/favourites, or is being on the list enough?
-5. **History visibility**: should `/history` (and removal reasons) be public?
-6. **MCP writes**: should Claude be able to add/remove, or read-only with
-   adds only through the site and Shortcut?
-7. **Login**: Access with one-time PIN to me@gcameron.com, or Google login?
-8. **Exceptions**: is `kind` (studio / live / compilation / EP / soundtrack)
-   the right granularity, and should non-studio albums be shown with a badge?
+1. **Deploys**: Workers Builds, as in `groceries`. `deploy.yml` is retired.
+2. **Storefront**: Swiss (`ch`) for lookups, links and embeds.
+3. **Starting list**: none to import; examples to come for testing.
+4. **Notes**: yes, one free-text note per album, public. No ranking or
+   favourites: everything on the list is a favourite of some kind.
+5. **History**: private. Removed albums and reasons are owner-only.
+6. **MCP**: read and write (add, remove, restore, edit note), owner only.
+7. **Login**: Cloudflare Access, one-time PIN by email. I configure the
+   policies in Zero Trust when we reach Phase 1.
+8. **Album type**: dropped. No `kind` column, no badges.

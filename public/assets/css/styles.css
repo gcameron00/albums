@@ -19,7 +19,8 @@
 
 body {
   font-family: system-ui, sans-serif;
-  margin: 2rem;
+  margin: 2rem 16px;
+  max-width: 60rem;
   background-color: var(--color-bg);
   color: var(--color-text);
 }

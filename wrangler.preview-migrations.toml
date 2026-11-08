@@ -1,0 +1,8 @@
+# Used only to apply D1 migrations to the Preview database (see
+# `npm run preview`). Must point at the same database as
+# [[previews.d1_databases]] in wrangler.toml. Never point it at production.
+[[d1_databases]]
+binding = "PREVIEW_DB"
+database_name = "albums-preview"
+database_id = "934a0dc8-be92-4cbb-b591-dc8984508e91"
+migrations_dir = "migrations"

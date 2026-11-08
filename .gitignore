@@ -11,3 +11,6 @@ build/
 
 # Editor settings
 .vscode/
+# Wrangler
+.wrangler/
+.dev.vars
