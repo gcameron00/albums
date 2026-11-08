@@ -19,9 +19,11 @@ directory = "public"
 binding = "ASSETS"
 run_worker_first = true
 
-# Access application "Albums admin" protects albums.gcameron.com/admin
-# (one-time PIN for me, Service Auth for the Shortcut). Neither value is
-# secret. The Worker refuses every /admin request if either is empty.
+# Access application "Albums admin" protects albums.gcameron.com/admin and
+# /mcp (one-time PIN for me, Service Auth for the Shortcut, Managed OAuth for
+# MCP clients). Neither value is secret. The Worker refuses every /admin and
+# /mcp request if either is empty. ACCESS_AUD may list several audience tags,
+# comma-separated, if /mcp ever needs an Access application of its own.
 [vars]
 STOREFRONT = "ch"
 ACCESS_TEAM_DOMAIN = "grahamcameron.cloudflareaccess.com"
@@ -41,12 +43,6 @@ database_name = "albums"
 database_id = "b53e925c-42c1-4820-bd69-070075766207"
 migrations_dir = "migrations"
 
-# OAuth clients and tokens for the MCP connector
-# (@cloudflare/workers-oauth-provider). Created 2026-11-08.
-[[kv_namespaces]]
-binding = "OAUTH_KV"
-id = "53e202e1668e4d419c0142f49a4cdc3a"
-
 # Worker Previews: branch builds run `npm run preview`, which applies D1
 # migrations to the preview database and then runs `wrangler preview`.
 # Previews never touch production data. The migrations target lives in
@@ -64,7 +60,3 @@ APPLE_KEY_ID = ""
 binding = "DB"
 database_name = "albums-preview"
 database_id = "934a0dc8-be92-4cbb-b591-dc8984508e91"
-
-[[previews.kv_namespaces]]
-binding = "OAUTH_KV"
-id = "5f7f6ac1e91d444191e5ab2d5e07c3b9"

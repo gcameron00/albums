@@ -213,10 +213,9 @@ when an Access session cookie is present.
 
 - **Public**: every `GET` page and `GET /api/*`, listed albums only.
 - **Owner only**: `/admin/*` (all writes and the history page) and `/mcp`.
-- All writes live under `/admin/*`. The Access application **Albums admin**
-  covers only `albums.gcameron.com/admin`; everything else stays public.
-  `/mcp` is *not* behind it: Claude calls `/mcp` with a token the Worker
-  issues, which Access would block (section 7). Policies (set up 2026-11-08):
+- The Access application **Albums admin** covers `albums.gcameron.com/admin`
+  and `/mcp` (with Managed OAuth for MCP clients, section 7); everything else
+  stays public. Policies (set up 2026-11-08):
   - *Allow* me@gcameron.com, one-time PIN by email — browser.
   - *Service Auth* with service token `albums-shortcut` — the Shortcut.
     (Not *Bypass*: Bypass skips Access, so no JWT would reach the Worker.)
@@ -242,17 +241,18 @@ Claude as a custom connector. Implemented in `src/mcp.ts` without an SDK:
 stateless JSON-RPC, one message per POST, JSON responses (no SSE stream),
 notifications answered with 202.
 
-**Auth** (`src/index.ts`, `src/oauth.ts`): `@cloudflare/workers-oauth-provider`
-handles dynamic client registration (`/oauth/register`), tokens
-(`/oauth/token`, with refresh) and the `/.well-known` metadata, with state in
-KV (`OAUTH_KV`; `albums-oauth`, and `albums-oauth-preview` for previews).
-Its authorize endpoint is `/admin/authorize`, inside the existing **Albums
-admin** Access application, so no second Access app is needed: Access asks
-for the one-time PIN, the Worker checks the Access JWT carries an email (not
-a service token), and a consent page names the client and where it returns
-to. Only *Allow* (a same-origin form post) issues a token, with props
-`{ email }`; `/mcp` refuses requests without them. `/oauth/*` and
-`/.well-known/*` are outside Access because Claude's servers call them.
+**Auth: Cloudflare Access Managed OAuth** (decided 2026-11-08, as in
+`add-blog`'s `docs/mcp.md`). `/mcp` is a second path on the **Albums admin**
+Access application, with Managed OAuth on and
+`https://claude.ai/api/mcp/auth_callback` allow-listed. Access answers
+unauthenticated calls with 401 and its own resource metadata, handles client
+registration, PKCE and tokens, and forwards its usual JWT; `src/app.ts`
+verifies it like any `/admin` request and requires an email (no service
+tokens). No OAuth code, dependency or KV in the Worker. (A first version used
+`@cloudflare/workers-oauth-provider` with KV and a consent page; dropped
+before merge in favour of the proven add-blog set-up.) If Managed OAuth does
+not work on a path-based app, `/mcp` gets its own Access app and its audience
+tag joins `ACCESS_AUD` (comma-separated).
 
 Tools (all owner-only; the token implies the owner):
 
@@ -276,8 +276,8 @@ Results come as JSON text plus `structuredContent`. Each album includes
 
 ```
 src/
-  index.ts        entry: OAuth provider in front of the site and /mcp
-  app.ts          router for the site and public API
+  index.ts        Worker entry
+  app.ts          router: site, public API, /admin, /mcp
   http.ts         responses, body reading, same-origin checks
   auth.ts         Access JWT verification (from groceries)
   apple.ts        link parsing, Apple Music API and album-page fallback
@@ -286,7 +286,6 @@ src/
   catalog.ts      read queries (list, filters, random, history)
   pages.ts        public HTML pages
   admin.ts        owner pages and writes under /admin
-  oauth.ts        consent page for connecting Claude
   mcp.ts          MCP JSON-RPC server and tools
   format.ts, html.ts
 migrations/       D1 schema

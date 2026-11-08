@@ -17,8 +17,10 @@ import { json } from "./http.ts";
 
 /**
  * Remote MCP server (Streamable HTTP, stateless, JSON responses) at /mcp.
- * Reached only with an OAuth token that the owner approved at
- * /admin/authorize (see src/oauth.ts), so every tool may read and write.
+ * /mcp is behind the Albums admin Access application with Managed OAuth:
+ * Access runs the OAuth flow for MCP clients (one-time PIN), checks the
+ * token at the edge and forwards its JWT, which src/app.ts verifies like any
+ * /admin request. So every caller is the owner and every tool may write.
  */
 
 export const SERVER_INFO = { name: "albums", title: "Albums", version: "1.0.0" };
@@ -30,7 +32,7 @@ Mostly original studio albums; there is no ranking. Search by artist or album ti
 filter by decade or genre, pick at random, add from an Apple Music link, edit notes, remove (kept in a \
 private history) and restore. Each album has an apple_url that can be played with a music connector.`;
 
-/** Who approved the token (OAuth props). */
+/** The person Access identified. */
 export interface McpProps {
   email: string;
 }

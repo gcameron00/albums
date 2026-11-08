@@ -3,7 +3,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 export interface AuthEnv {
   /** e.g. "grahamcameron.cloudflareaccess.com" */
   ACCESS_TEAM_DOMAIN: string;
-  /** Application Audience (AUD) tag of the Access application. */
+  /** Application Audience (AUD) tag of the Access application; several may be comma-separated. */
   ACCESS_AUD: string;
 }
 
@@ -34,7 +34,8 @@ export async function verifyAccess(request: Request, env: AuthEnv): Promise<Iden
     keySets.set(issuer, keys);
   }
   try {
-    const { payload } = await jwtVerify(token, keys, { issuer, audience: env.ACCESS_AUD });
+    const audience = env.ACCESS_AUD.split(",").map((aud) => aud.trim()).filter(Boolean);
+    const { payload } = await jwtVerify(token, keys, { issuer, audience });
     const email = typeof payload.email === "string" ? payload.email : null;
     const serviceToken = typeof payload.common_name === "string" ? payload.common_name : null;
     return { email, serviceToken };

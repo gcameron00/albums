@@ -4,7 +4,6 @@ import { handle, type Deps, type Env } from "../src/app.ts";
 import { parseMusicApiAlbum } from "../src/apple.ts";
 import type { Identity } from "../src/auth.ts";
 import { mcp, TOOLS } from "../src/mcp.ts";
-import type { AuthRequest, OAuthHelpers } from "../src/oauth.ts";
 import { createTestDb } from "./helpers/d1.ts";
 import { kickApi, violatorApi } from "./fixtures/apple.ts";
 
@@ -150,94 +149,32 @@ describe("MCP tools", () => {
   });
 });
 
-describe("OAuth consent at /admin/authorize", () => {
-  const REQ: AuthRequest = {
-    responseType: "code",
-    clientId: "client-1",
-    redirectUri: "https://claude.ai/api/mcp/auth_callback",
-    scope: ["albums"],
-    state: "xyz",
-  };
+describe("/mcp behind Access", () => {
+  const post = (body: unknown) =>
+    new Request(`${BASE}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify(body),
+    });
 
-  function provider(registered = [REQ.redirectUri]) {
-    const completed: unknown[] = [];
-    const helpers: OAuthHelpers = {
-      parseAuthRequest: async () => REQ,
-      lookupClient: async (id) => (id === "client-1" ? { clientId: id, clientName: "Claude", redirectUris: registered } : null),
-      completeAuthorization: async (o) => {
-        completed.push(o);
-        return { redirectTo: `${REQ.redirectUri}?code=abc&state=xyz` };
-      },
-    };
-    return { helpers, completed };
-  }
-
-  async function run(env: Env, deps: Deps, req: Request) {
-    return handle(req, env, deps);
-  }
-
-  const path = "/admin/authorize?response_type=code&client_id=client-1&state=xyz";
-
-  it("asks the owner, then completes with their email", async () => {
+  it("serves a person Access identified", async () => {
     const { env, deps } = await setup();
-    const { helpers, completed } = provider();
-    env.OAUTH_PROVIDER = helpers;
-    const page = await run(env, deps, new Request(BASE + path));
-    expect(page.status).toBe(200);
-    const html = await page.text();
-    expect(html).toContain("Connect Claude?");
-    expect(html).toContain("<strong>claude.ai</strong>");
-    expect(html).toContain('action="/admin/authorize?response_type=code&amp;client_id=client-1&amp;state=xyz"');
-
-    const res = await run(
-      env,
-      deps,
-      new Request(BASE + path, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded", "sec-fetch-site": "same-origin" },
-        body: "decision=allow",
-      }),
-    );
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("https://claude.ai/api/mcp/auth_callback?code=abc&state=xyz");
-    expect(completed).toEqual([
-      { request: REQ, userId: "owner@example.com", metadata: { label: "Claude" }, scope: ["albums"], props: { email: "owner@example.com" } },
-    ]);
+    const res = await handle(post({ jsonrpc: "2.0", id: 1, method: "tools/list" }), env, deps);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { result: { tools: unknown[] } }).result.tools).toHaveLength(TOOLS.length);
   });
 
-  it("sends access_denied back on cancel, and refuses cross-site posts", async () => {
+  it("refuses requests without an Access identity, and service tokens", async () => {
     const { env, deps } = await setup();
-    const { helpers, completed } = provider();
-    env.OAUTH_PROVIDER = helpers;
-    const post = (fields: string, site: string) =>
-      run(
-        env,
-        deps,
-        new Request(BASE + path, {
-          method: "POST",
-          headers: { "content-type": "application/x-www-form-urlencoded", "sec-fetch-site": site },
-          body: fields,
-        }),
-      );
-    const cancel = await post("decision=deny", "same-origin");
-    expect(cancel.headers.get("location")).toBe("https://claude.ai/api/mcp/auth_callback?error=access_denied&state=xyz");
-    expect((await post("decision=allow", "cross-site")).status).toBe(403);
-    expect(completed).toEqual([]);
-  });
-
-  it("rejects unregistered redirects, service tokens and missing configuration", async () => {
-    const { env, deps } = await setup();
-    env.OAUTH_PROVIDER = provider(["https://elsewhere.example/cb"]).helpers;
-    expect((await run(env, deps, new Request(BASE + path))).status).toBe(400);
-
-    env.OAUTH_PROVIDER = provider().helpers;
-    const token = { ...deps, verify: async () => ({ email: null, serviceToken: "abc.access" }) };
-    expect((await run(env, token, new Request(BASE + path))).status).toBe(403);
-
-    env.OAUTH_PROVIDER = undefined;
-    expect((await run(env, deps, new Request(BASE + path))).status).toBe(500);
-
     const nobody = { ...deps, verify: async () => null };
-    expect((await run(env, nobody, new Request(BASE + path))).status).toBe(401);
+    expect((await handle(post({ jsonrpc: "2.0", id: 1, method: "tools/list" }), env, nobody)).status).toBe(401);
+    const token = { ...deps, verify: async (): Promise<Identity> => ({ email: null, serviceToken: "abc.access" }) };
+    expect((await handle(post({ jsonrpc: "2.0", id: 1, method: "tools/list" }), env, token)).status).toBe(403);
+  });
+
+  it("logs changes as made through MCP", async () => {
+    const { env, deps, sqlite, violator } = await setup();
+    await handle(post({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "update_note", arguments: { id: violator, note: "x" } } }), env, deps);
+    expect(sqlite.prepare("SELECT source FROM events ORDER BY id DESC").get()).toEqual({ source: "mcp" });
   });
 });
