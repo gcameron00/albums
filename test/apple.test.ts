@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { LinkError, parseAppleMusicLink, parseLookup } from "../src/apple.ts";
-import { kick, violator } from "./fixtures/lookup.ts";
+import { albumIdFromSongPage, isoDurationMs, LinkError, parseAlbumPage, parseAppleMusicLink, parseLookup } from "../src/apple.ts";
+import { kick, personalJesusPage, violator, violatorPage } from "./fixtures/lookup.ts";
 
 describe("parseAppleMusicLink", () => {
   it("reads the example album links", () => {
@@ -82,5 +82,42 @@ describe("parseLookup", () => {
 
   it("fails when there is no album in the answer", () => {
     expect(() => parseLookup([], "ch")).toThrow(/not available in the CH Apple Music store/);
+  });
+});
+
+describe("album page fallback", () => {
+  it("reads the album from the page's JSON-LD", () => {
+    const album = parseAlbumPage(violatorPage, "665404621", "ch");
+    expect(album).toMatchObject({
+      appleId: "665404621",
+      title: "Violator",
+      artist: "Depeche Mode",
+      artistId: "148662",
+      releaseDate: "1990-03-19",
+      year: 1990,
+      genre: "Alternative",
+      trackCount: 9,
+      appleUrl: "https://music.apple.com/ch/album/violator/665404621",
+      artworkUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/bb/cc/example/source/{w}x{h}bb.jpg",
+    });
+    expect(album.tracks[5]).toEqual({ disc: 1, number: 6, title: "Enjoy the Silence", durationMs: 245000 });
+  });
+
+  it("fails when the page has no album", () => {
+    expect(() => parseAlbumPage("<html></html>", "1", "ch")).toThrow(/not available/);
+  });
+
+  it("finds the album of a song page", () => {
+    expect(albumIdFromSongPage(personalJesusPage)).toBe("665404621");
+    expect(albumIdFromSongPage('<a href="https://music.apple.com/ch/album/violator/665404621?i=1">')).toBe("665404621");
+    expect(albumIdFromSongPage("<html></html>")).toBe(null);
+  });
+
+  it("parses ISO durations", () => {
+    expect(isoDurationMs("PT4M27S")).toBe(267000);
+    expect(isoDurationMs("PT1H2M3S")).toBe(3723000);
+    expect(isoDurationMs("PT45S")).toBe(45000);
+    expect(isoDurationMs("PT")).toBe(null);
+    expect(isoDurationMs(5)).toBe(null);
   });
 });

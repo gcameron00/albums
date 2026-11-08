@@ -3,11 +3,11 @@ import { handle, type Deps, type Env } from "../src/app.ts";
 import type { Identity } from "../src/auth.ts";
 import { escapeHtml } from "../src/html.ts";
 import { createTestDb } from "./helpers/d1.ts";
-import { empty, kick, personalJesusSong, violator } from "./fixtures/lookup.ts";
+import { empty, kick, personalJesusPage, personalJesusSong, violator, violatorPage } from "./fixtures/lookup.ts";
 
 const ME: Identity = { email: "me@gcameron.com", serviceToken: null };
 
-function setup(opts: { who?: Identity | null; answers?: Record<string, unknown> } = {}) {
+function setup(opts: { who?: Identity | null; answers?: Record<string, unknown>; lookupStatus?: number } = {}) {
   const { d1, sqlite } = createTestDb();
   const env: Env = {
     DB: d1,
@@ -18,6 +18,7 @@ function setup(opts: { who?: Identity | null; answers?: Record<string, unknown> 
   };
   const lookups: string[] = [];
   const userAgents: Array<string | null> = [];
+  const pages: string[] = [];
   const answers = opts.answers ?? {
     "665404621": violator,
     "665404702": personalJesusSong,
@@ -28,15 +29,26 @@ function setup(opts: { who?: Identity | null; answers?: Record<string, unknown> 
     fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       userAgents.push(new Headers(init?.headers).get("user-agent"));
+      if (url.hostname === "music.apple.com") {
+        pages.push(url.pathname + url.search);
+        const page = PAGES[url.pathname];
+        return page ? new Response(page, { headers: { "content-type": "text/html" } }) : new Response("", { status: 404 });
+      }
       lookups.push(url.search);
+      if (opts.lookupStatus) return new Response("", { status: opts.lookupStatus });
       const id = url.searchParams.get("id") ?? "";
       return Response.json(answers[id] ?? empty);
     }) as typeof fetch,
     now: () => new Date("2026-11-08T16:00:00Z"),
   };
   const run = (req: Request) => handle(req, env, deps);
-  return { run, sqlite, lookups, userAgents };
+  return { run, sqlite, lookups, userAgents, pages };
 }
+
+const PAGES: Record<string, string> = {
+  "/ch/album/665404621": violatorPage,
+  "/ch/song/665404702": personalJesusPage,
+};
 
 const get = (path: string) => new Request(`https://albums.gcameron.com${path}`);
 const add = (body: unknown, headers: Record<string, string> = {}) =>
@@ -156,6 +168,28 @@ describe("POST /admin/albums", () => {
     expect((await run(add({ url: "x", note: "a".repeat(2001) }))).status).toBe(400);
   });
 
+  it("reads the album page when Apple's lookup API refuses", async () => {
+    const { run, pages, sqlite } = setup({ lookupStatus: 403 });
+    const res = await run(add({ url: "https://music.apple.com/ch/album/violator/665404621?l=en-GB" }));
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ summary: "Added: Depeche Mode – Violator (1990)" });
+    expect(pages).toEqual(["/ch/album/665404621?l=en-GB"]);
+    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM tracks").get()).toEqual({ n: 9 });
+  });
+
+  it("finds a song's album from its page when the lookup API refuses", async () => {
+    const { run, pages } = setup({ lookupStatus: 403 });
+    const res = await run(add({ url: "https://music.apple.com/ch/song/personal-jesus/665404702" }));
+    expect(res.status).toBe(201);
+    expect(pages).toEqual(["/ch/song/665404702?l=en-GB", "/ch/album/665404621?l=en-GB"]);
+  });
+
+  it("says not in store when the lookup API refuses and the page is missing", async () => {
+    const { run } = setup({ lookupStatus: 403 });
+    const res = await run(add({ url: "https://music.apple.com/ch/album/hopes-and-fears/1440798025" }));
+    expect(res.status).toBe(404);
+  });
+
   it("returns 502 when Apple fails", async () => {
     const failing = handle(
       add({ url: "https://music.apple.com/ch/album/violator/665404621" }),
@@ -166,6 +200,7 @@ describe("POST /admin/albums", () => {
         ACCESS_TEAM_DOMAIN: "x",
         ACCESS_AUD: "y",
       },
+      // Lookup API and album page both refuse.
       { verify: async () => ME, fetch: (async () => new Response("down", { status: 503 })) as typeof fetch, now: () => new Date() },
     );
     expect((await failing).status).toBe(502);

@@ -158,6 +158,15 @@ size), `collectionViewUrl`. Everything uses the Swiss storefront (`ch`): an
 album not available there is rejected with a clear message, because its embed
 would not play. Nothing from Apple is stored beyond this metadata.
 
+**Fallback (2026-11-08):** the lookup API answers HTTP 403 with an empty body
+to requests from Cloudflare Workers, User-Agent or not. When it refuses, the
+Worker reads the album's `music.apple.com/ch/album/<id>?l=en-GB` page instead
+and takes the schema.org `MusicAlbum` JSON-LD (name, artist, date, genre,
+image, tracks with durations). Song links resolve through the song page's
+`inAlbum`. Disc numbers are not in the JSON-LD, so tracks are numbered in
+order on disc 1. If Apple also blocks the page, the next option is the Apple
+Music API with a MusicKit developer token.
+
 No album type is stored. Whether a live album or compilation belongs on the
 list is my call when adding it.
 

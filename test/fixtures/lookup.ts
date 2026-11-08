@@ -81,3 +81,35 @@ export const kick = {
 };
 
 export const empty = { resultCount: 0, results: [] };
+
+/**
+ * music.apple.com album page, reduced to the parts the fallback reads: the
+ * schema.org MusicAlbum JSON-LD. Hand-written like the answers above.
+ */
+export const violatorPage = `<!DOCTYPE html><html><head>
+<title>Violator by Depeche Mode on Apple Music</title>
+<script type="application/ld+json" id="schema:music-album">${JSON.stringify({
+  "@context": "http://schema.org",
+  "@type": "MusicAlbum",
+  name: "Violator",
+  url: "https://music.apple.com/ch/album/violator/665404621",
+  image: "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/bb/cc/example/source/1200x630wp.png",
+  datePublished: "1990-03-19",
+  genre: ["Alternative", "Music"],
+  byArtist: [{ "@type": "MusicGroup", name: "Depeche Mode", url: "https://music.apple.com/ch/artist/depeche-mode/148662" }],
+  tracks: violatorTracks.map((name, i) => ({
+    "@type": "MusicRecording",
+    name,
+    duration: `PT4M${i}S`,
+    url: `https://music.apple.com/ch/song/x/${665404700 + i}`,
+  })),
+})}</script>
+</head><body></body></html>`;
+
+export const personalJesusPage = `<!DOCTYPE html><html><head>
+<script type="application/ld+json">${JSON.stringify({
+  "@context": "http://schema.org",
+  "@type": "MusicRecording",
+  name: "Personal Jesus",
+  inAlbum: { "@type": "MusicAlbum", name: "Violator", url: "https://music.apple.com/ch/album/violator/665404621" },
+})}</script></head><body></body></html>`;
