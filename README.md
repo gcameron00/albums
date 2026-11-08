@@ -37,11 +37,23 @@ deployment set-up and the build order.
 
 ## Status
 
-Phase 0 (repo fixes) done in code: Worker in `src/`, static files in
-`public/`, D1 `albums` and `albums-preview` created (WEUR), schema in
-`migrations/0001_init.sql`, CI in `.github/workflows/ci.yml`. The site shows a
-placeholder home page with the album count and `/health`. Next: Phase 1
-(adding albums). See [docs/PLAN.md](docs/PLAN.md), section 9.
+- **Phase 0** (repo fixes, D1, previews, CI): done and deployed.
+- **Phase 1** (adding albums): code done. `POST /admin/albums` takes an Apple
+  Music link, looks the album up in the Swiss store, saves it with its tracks
+  and reports duplicates and restores. `/admin` is behind Cloudflare Access
+  and the Worker checks the Access JWT. To verify on a preview, then the
+  Shortcut ([docs/SHORTCUT.md](docs/SHORTCUT.md)).
+
+Next: Phase 2, the public pages. See [docs/PLAN.md](docs/PLAN.md), section 9.
+
+## Routes
+
+| Route | Method | Access | Returns |
+| --- | --- | --- | --- |
+| `/` | GET | public | Home page (placeholder with the album count) |
+| `/health` | GET | public | `{"ok":true}` |
+| `/admin` | GET | Access | Who is signed in |
+| `/admin/albums` | POST | Access | Add an album. JSON body `{"url": "<Apple Music link>", "note": "…", "source": "web\|shortcut\|mcp"}`; answers `{outcome, summary, album}` (see [docs/SHORTCUT.md](docs/SHORTCUT.md)) |
 
 ## Deployment
 
