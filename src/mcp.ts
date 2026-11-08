@@ -1,6 +1,6 @@
-import { describe, findById, removeAlbum, restoreAlbum, updateNote, type AlbumRow } from "./albums.ts";
+import { describe, findById, removeAlbum, restoreAlbum, setOriginalYear, updateNote, type AlbumRow } from "./albums.ts";
 import { LinkError, LookupError } from "./apple.ts";
-import { addFromLink } from "./admin.ts";
+import { addFromLink, readYear } from "./admin.ts";
 import type { Deps, Env } from "./app.ts";
 import {
   facets,
@@ -74,7 +74,9 @@ function albumOut(a: AlbumRow, full = false) {
   return {
     ...base,
     apple_id: a.apple_id,
-    release_date: a.release_date,
+    original_year: a.original_year,
+    edition: a.edition,
+    edition_release_date: a.release_date,
     artwork: a.artwork_url ? a.artwork_url.replace("{w}x{h}", "600x600") : null,
     status: a.status,
     removed_at: a.removed_at,
@@ -291,6 +293,34 @@ export const TOOLS: Tool[] = [
       if (note.length > 2000) throw new ToolError("note is longer than 2000 characters.");
       const updated = await updateNote(env.DB, album, note || null, { source: "mcp", now: now(deps) });
       return { summary: `Note ${note ? "saved" : "cleared"}: ${describe(updated)}`, album: albumOut(updated) };
+    },
+  },
+  {
+    name: "set_original_year",
+    title: "Set an album's original year",
+    description:
+      "Set the year an album was first released, when Apple's date is a reissue's (e.g. a remaster). " +
+      "It becomes the year shown, sorted and filtered on. Pass null to go back to Apple's year.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "integer", minimum: 1 },
+        original_year: { type: ["integer", "null"], minimum: 1900, description: "e.g. 1987, or null to clear." },
+      },
+      required: ["id", "original_year"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    async run(args, env, deps) {
+      const album = await loadAlbum(env, requiredId(args));
+      if (!("original_year" in args)) throw new ToolError("original_year is required (null clears it).");
+      const year = readYear(args.original_year, deps.now());
+      if ("error" in year) throw new ToolError(year.error);
+      const updated = await setOriginalYear(env.DB, album, year.value, { source: "mcp", now: now(deps) });
+      return {
+        summary: year.value === null ? `Original year cleared: ${describe(updated)}` : `Original year set: ${describe(updated)}`,
+        album: albumOut(updated, true),
+      };
     },
   },
   {

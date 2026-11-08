@@ -13,6 +13,7 @@ function info(overrides: Partial<AlbumInfo>): AlbumInfo {
     appleId: "1",
     storefront: "ch",
     title: "Untitled",
+    edition: null,
     artist: "Nobody",
     artistId: null,
     releaseDate: null,
@@ -69,7 +70,7 @@ describe("list page", () => {
   it("shows listed albums, newest first, without removed ones", async () => {
     const { text } = await setup();
     const html = await text("/");
-    expect(titles(html)).toEqual(["Hopes and Fears", "Kick (Remastered)", "Violator", "Disintegration"]);
+    expect(titles(html)).toEqual(["Hopes and Fears", "Kick", "Violator", "Disintegration"]);
     expect(html).toContain("4 albums worth playing from start to finish");
     expect(html).toContain('<a href="/admin">Admin</a>');
     expect(html).not.toContain("Gone");
@@ -78,9 +79,9 @@ describe("list page", () => {
 
   it("sorts by artist ignoring a leading The, and by year", async () => {
     const { text } = await setup();
-    expect(titles(await text("/?sort=artist"))).toEqual(["Disintegration", "Violator", "Kick (Remastered)", "Hopes and Fears"]);
-    expect(titles(await text("/?sort=year"))).toEqual(["Kick (Remastered)", "Disintegration", "Violator", "Hopes and Fears"]);
-    expect(titles(await text("/?sort=title"))).toEqual(["Disintegration", "Hopes and Fears", "Kick (Remastered)", "Violator"]);
+    expect(titles(await text("/?sort=artist"))).toEqual(["Disintegration", "Violator", "Kick", "Hopes and Fears"]);
+    expect(titles(await text("/?sort=year"))).toEqual(["Kick", "Disintegration", "Violator", "Hopes and Fears"]);
+    expect(titles(await text("/?sort=title"))).toEqual(["Disintegration", "Hopes and Fears", "Kick", "Violator"]);
   });
 
   it("searches album titles and artists, not track names", async () => {
@@ -94,7 +95,7 @@ describe("list page", () => {
 
   it("filters by decade, genre and artist", async () => {
     const { text } = await setup();
-    expect(titles(await text("/?decade=1980"))).toEqual(["Kick (Remastered)", "Disintegration"]);
+    expect(titles(await text("/?decade=1980"))).toEqual(["Kick", "Disintegration"]);
     expect(titles(await text("/?genre=Alternative&sort=year"))).toEqual(["Disintegration", "Violator", "Hopes and Fears"]);
     const artist = await text("/?artist=Depeche+Mode");
     expect(titles(artist)).toEqual(["Violator"]);
@@ -106,7 +107,7 @@ describe("list page", () => {
     const { text, ids } = await setup();
     const html = await text("/?view=list&sort=artist");
     expect(html).toContain('<table class="albums">');
-    expect(titles(html)).toEqual(["Disintegration", "Violator", "Kick (Remastered)", "Hopes and Fears"]);
+    expect(titles(html)).toEqual(["Disintegration", "Violator", "Kick", "Hopes and Fears"]);
     expect(html).toContain(`<a href="/albums/${ids["665404621"]}">Violator</a>`);
     expect(html).toContain("8 Nov 2026");
   });
@@ -149,7 +150,7 @@ describe("about and API", () => {
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     const body = (await res.json()) as { total: number; albums: Array<Record<string, unknown>> };
     expect(body.total).toBe(4);
-    expect(body.albums.map((a) => a.title)).toEqual(["Disintegration", "Violator", "Kick (Remastered)", "Hopes and Fears"]);
+    expect(body.albums.map((a) => a.title)).toEqual(["Disintegration", "Violator", "Kick", "Hopes and Fears"]);
     expect(Object.keys(body.albums[0]!)).not.toContain("removed_reason");
   });
 
@@ -233,10 +234,10 @@ describe("sortable list headings", () => {
     expect(asc).toContain('<th aria-sort="ascending"><a href="/?sort=artist&amp;dir=desc&amp;view=list">Artist');
     expect(asc).toContain('<th><a href="/?sort=year&amp;view=list">Year</a></th>');
     const desc = await text("/?view=list&sort=artist&dir=desc");
-    expect(titles(desc)).toEqual(["Hopes and Fears", "Kick (Remastered)", "Violator", "Disintegration"]);
+    expect(titles(desc)).toEqual(["Hopes and Fears", "Kick", "Violator", "Disintegration"]);
     expect(desc).toContain('<th aria-sort="descending"><a href="/?sort=artist&amp;view=list">Artist');
-    expect(titles(await text("/?view=list&sort=year&dir=desc"))).toEqual(["Hopes and Fears", "Violator", "Disintegration", "Kick (Remastered)"]);
-    expect(titles(await text("/?view=list&dir=asc"))).toEqual(["Disintegration", "Violator", "Kick (Remastered)", "Hopes and Fears"]);
+    expect(titles(await text("/?view=list&sort=year&dir=desc"))).toEqual(["Hopes and Fears", "Violator", "Disintegration", "Kick"]);
+    expect(titles(await text("/?view=list&dir=asc"))).toEqual(["Disintegration", "Violator", "Kick", "Hopes and Fears"]);
   });
 
   it("keeps direction out of URLs when it is the default", () => {

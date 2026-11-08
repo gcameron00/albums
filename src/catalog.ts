@@ -187,6 +187,8 @@ export function publicAlbum(a: AlbumRow) {
     title: a.title,
     artist: a.artist,
     year: a.year,
+    original_year: a.original_year,
+    edition: a.edition,
     release_date: a.release_date,
     genre: a.genre,
     track_count: a.track_count,

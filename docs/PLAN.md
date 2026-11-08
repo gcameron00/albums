@@ -52,11 +52,13 @@ CREATE TABLE albums (
   id            INTEGER PRIMARY KEY,
   apple_id      TEXT NOT NULL UNIQUE,      -- collectionId, e.g. "1440921045"
   storefront    TEXT NOT NULL DEFAULT 'ch',
-  title         TEXT NOT NULL,
+  title         TEXT NOT NULL,             -- without edition labels
+  edition       TEXT,                      -- label taken out of Apple's title, e.g. "Remastered" (0003)
   artist        TEXT NOT NULL,
   artist_id     TEXT,                      -- Apple artistId
-  release_date  TEXT,                      -- ISO date
-  year          INTEGER,                   -- derived, for sorting/filters
+  release_date  TEXT,                      -- ISO date of the edition Apple has
+  year          INTEGER,                   -- shown/sorted/filtered: original_year, else release_date's year
+  original_year INTEGER,                   -- set by hand for reissues (0003)
   genre         TEXT,
   track_count   INTEGER,
   duration_ms   INTEGER,                   -- sum of track lengths
@@ -235,6 +237,7 @@ Tools (all owner-only; the token implies the owner):
 | `list_history` | read | Removed albums with reasons, and the latest changes. |
 | `add_album` | write | From an Apple Music album or song link, optional note; duplicate/restore handled. |
 | `update_note` | write | Set or clear the public note. |
+| `set_original_year` | write | Set the first-release year when Apple's date is a reissue's, or clear it (null). |
 | `remove_album` | write | Off the list into the private history, optional reason. |
 | `restore_album` | write | Put a removed album back. |
 
@@ -251,6 +254,7 @@ src/
   http.ts         responses, body reading, same-origin checks
   auth.ts         Access JWT verification (from groceries)
   apple.ts        link parsing, Apple Music API and album-page fallback
+  edition.ts      edition labels out of titles ("(Remastered)")
   musicToken.ts   Apple Music developer token (MusicKit key)
   albums.ts       add/remove/restore/edit logic shared by web, Shortcut, MCP
   catalog.ts      read queries (list, filters, random, history)
@@ -301,3 +305,7 @@ change.
     pages add an *Edit* link when signed in.
 12. **MCP auth**: Cloudflare Access Managed OAuth, as in `add-blog`. No OAuth
     library or KV in the Worker.
+13. **Original year**: set by hand (edit page, `set_original_year`), not
+    looked up; it replaces Apple's reissue year everywhere. Apple's edition
+    date and edition label (taken out of titles by `src/edition.ts`) show
+    only on the album page.

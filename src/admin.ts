@@ -3,8 +3,10 @@ import {
   describe,
   findByAppleId,
   findById,
+  MIN_YEAR,
   removeAlbum,
   restoreAlbum,
+  setOriginalYear,
   SOURCES,
   updateNote,
   type AddResult,
@@ -82,7 +84,9 @@ ${opts.error ? `      <p class="flash error" role="alert">${e(opts.error)}</p>\n
   );
 }
 
-export const EDIT_MESSAGES: Record<string, string> = { saved: "Note saved." };
+export const EDIT_MESSAGES: Record<string, string> = { saved: "Note saved.", year: "Original year saved." };
+
+const editionYear = (a: AlbumRow) => (a.release_date ? a.release_date.slice(0, 4) : null);
 
 export function editPage(a: AlbumRow, message?: string): string {
   const listed = a.status === "listed";
@@ -100,6 +104,13 @@ export function editPage(a: AlbumRow, message?: string): string {
         <label>Note <span class="hint">shown on the album page; leave empty for none</span>
           <textarea name="note" rows="4" maxlength="${MAX_NOTE_CHARS}">${e(a.note ?? "")}</textarea></label>
         <button type="submit">Save note</button>
+      </form>
+      <form class="admin-form" method="post" action="/admin/albums/${a.id}/year">
+        <label>Original year <span class="hint">when Apple's date is a reissue's${
+          editionYear(a) ? ` (Apple: ${e(editionYear(a)!)}${a.edition ? `, ${e(a.edition)}` : ""})` : ""
+        }; leave empty to use Apple's</span>
+          <input name="original_year" type="number" inputmode="numeric" min="${MIN_YEAR}" max="2100" value="${a.original_year ?? ""}"></label>
+        <button type="submit">Save year</button>
       </form>
 ${
   listed
@@ -128,6 +139,7 @@ function eventDetail(ev: EventRow): string {
     const d = JSON.parse(ev.detail) as { reason?: unknown; note?: unknown };
     if (typeof d.reason === "string") return d.reason;
     if ("note" in d) return typeof d.note === "string" ? d.note : "(cleared)";
+    if ("original_year" in d) return typeof (d as { original_year?: unknown }).original_year === "number" ? `Original year ${String((d as { original_year: number }).original_year)}` : "Original year cleared";
   } catch {
     // ignore
   }
@@ -225,7 +237,16 @@ async function add(request: Request, env: Env, deps: Deps, url: URL, who: Identi
   }
 }
 
-type AlbumAction = "save" | "remove" | "restore";
+type AlbumAction = "save" | "year" | "remove" | "restore";
+
+/** "" or missing clears; otherwise a whole year from MIN_YEAR to next year. */
+export function readYear(value: unknown, now: Date): { value: number | null } | { error: string } {
+  if (value === undefined || value === null || value === "") return { value: null };
+  const year = typeof value === "number" ? value : typeof value === "string" && /^\s*\d{4}\s*$/.test(value) ? Number(value) : NaN;
+  const max = now.getUTCFullYear() + 1;
+  if (!Number.isInteger(year) || year < MIN_YEAR || year > max) return { error: `original_year must be a year from ${MIN_YEAR} to ${max}.` };
+  return { value: year };
+}
 
 async function change(request: Request, env: Env, deps: Deps, url: URL, album: AlbumRow, action: AlbumAction): Promise<Response> {
   const body = await readBody(request, url);
@@ -241,6 +262,14 @@ async function change(request: Request, env: Env, deps: Deps, url: URL, album: A
     const updated = await updateNote(env.DB, album, note.value, opts);
     if (body.kind === "json") return json({ outcome: "saved", summary: `Note saved: ${describe(updated)}`, album: publicAlbum(updated) });
     return redirect(updated.status === "listed" ? `/albums/${updated.id}?msg=saved` : `/admin/albums/${updated.id}?msg=saved`);
+  }
+
+  if (action === "year") {
+    const year = readYear(body.fields.original_year, deps.now());
+    if ("error" in year) return fail(year.error, 400);
+    const updated = await setOriginalYear(env.DB, album, year.value, opts);
+    if (body.kind === "json") return json({ outcome: "saved", summary: `Year saved: ${describe(updated)}`, album: publicAlbum(updated) });
+    return redirect(`/admin/albums/${updated.id}?msg=year`);
   }
 
   if (action === "remove") {
@@ -276,11 +305,11 @@ export async function admin(request: Request, env: Env, deps: Deps, url: URL): P
   }
   if (path === "/admin/albums") return post ? add(request, env, deps, url, who) : notAllowed();
 
-  const m = path.match(/^\/admin\/albums\/([1-9]\d{0,9})(?:\/(remove|restore))?$/);
+  const m = path.match(/^\/admin\/albums\/([1-9]\d{0,9})(?:\/(remove|restore|year))?$/);
   if (m) {
     const album = await findById(env.DB, Number(m[1]));
     if (!album) return json({ error: "Not found." }, 404);
-    const sub = m[2] as "remove" | "restore" | undefined;
+    const sub = m[2] as "remove" | "restore" | "year" | undefined;
     if (!sub && get) return adminHtml(editPage(album, EDIT_MESSAGES[msg]));
     if (!post) return notAllowed();
     return change(request, env, deps, url, album, sub ?? "save");

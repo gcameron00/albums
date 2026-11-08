@@ -118,7 +118,7 @@ describe("MCP tools", () => {
   it("adds, edits, removes and restores, logged as mcp", async () => {
     const { call, sqlite, violator } = await setup();
     const added = await call("add_album", { url: "https://music.apple.com/ch/album/kick-remastered/1440855131", note: "Loud." });
-    expect(added.structuredContent).toMatchObject({ outcome: "created", summary: "Added: INXS – Kick (Remastered) (1987)" });
+    expect(added.structuredContent).toMatchObject({ outcome: "created", summary: "Added: INXS – Kick (1987)" });
     expect((await call("add_album", { url: "https://music.apple.com/ch/album/kick-remastered/1440855131" })).structuredContent.outcome).toBe(
       "duplicate",
     );
