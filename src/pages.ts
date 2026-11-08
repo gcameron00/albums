@@ -236,7 +236,7 @@ export function aboutPage(): string {
         <p>A personal list of albums worth playing from start to finish: records where the whole thing holds up, not just a great track or two.</p>
         <p>Mostly original studio albums. Live albums and compilations stay off the list, with the odd exception.</p>
         <p>There is no ranking. Everything here is a favourite of some kind.</p>
-        <p>Albums play through Apple Music. The players on album pages need an Apple Music subscription for full tracks; without one they play previews.</p>
+        <p>Albums play through Apple Music. The players need an Apple Music subscription for full tracks; without one they play previews.</p>
         <p>The list is also available as JSON at <a href="/api/albums">/api/albums</a>.</p>
       </article>`,
     { nav: "about", description: "What this list of albums is, and how albums get on it." },
