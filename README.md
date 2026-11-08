@@ -10,7 +10,7 @@ Hosted at **https://albums.gcameron.com** on Cloudflare (Worker + D1).
 
 | Area | Summary |
 | --- | --- |
-| **Add** | Paste an Apple Music album link on the site, or share it from the Music app through an iOS Shortcut. The Worker looks up title, artist, year, genre, artwork and track list from Apple's public lookup API. |
+| **Add** | Paste an Apple Music album link on the site, or share it from the Music app through an iOS Shortcut. The Worker looks up title, artist, year, genre, artwork and track list from the Apple Music API (or, without a key, the album's Apple Music page). |
 | **Display** | Public, read-only views, with an optional note per album: an artwork grid, a compact list and a page of playable Apple Music embeds. Sort and filter by artist, year, decade, genre and date added. |
 | **Remove** | Signed-in only. A removed album leaves the public list but is kept on a private **History** page with the date and an optional reason, and can be restored. |
 | **MCP** | A remote MCP server at `/mcp`, so Claude can be connected to the list: search, browse, pick something to play, look at history, add and remove. Owner only. |
@@ -22,7 +22,7 @@ Hosted at **https://albums.gcameron.com** on Cloudflare (Worker + D1).
 Music app ──share──▶ iOS Shortcut ──POST url──┐
 Site (signed in) ──paste link──────────────────┼─▶ Worker ──▶ D1 (albums, history)
 Claude ──MCP (OAuth via Cloudflare Access)─────┘      │
-                                                      └──▶ itunes.apple.com/lookup (metadata)
+                                                      └──▶ Apple Music API (metadata)
 Visitors ──GET──▶ Worker ──▶ HTML pages + Apple Music embeds
 ```
 
@@ -77,6 +77,30 @@ Settings → Build):
 
 The GitHub repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
 were only used by the old `deploy.yml` and can be deleted.
+
+## Apple Music API key
+
+Album details come from the Apple Music API when a MusicKit key is set;
+without one the Worker reads the album's music.apple.com page instead.
+
+1. [developer.apple.com](https://developer.apple.com/account) → Certificates,
+   Identifiers & Profiles → **Identifiers** → **+** → *Media IDs* →
+   description `Albums`, identifier `media.com.gcameron.albums`, tick
+   **MusicKit**.
+2. **Keys** → **+** → name `Albums MusicKit`, tick **Media Services
+   (MusicKit, ShazamKit, Apple Music Feed)** → Configure → choose the Media ID
+   from step 1 → Continue → Register. **Download** the `.p8` file (only
+   possible once) and note the **Key ID**.
+3. Your **Team ID** is under Membership details.
+4. Put Team ID and Key ID in `wrangler.toml` as `APPLE_TEAM_ID` and
+   `APPLE_KEY_ID` (in `[vars]` and `[previews.vars]`). They are not secret.
+5. Store the key as a secret, the whole `.p8` contents including the
+   `BEGIN`/`END` lines: Workers & Pages → `albums` → Settings → Variables and
+   Secrets → Add → type **Secret**, name `APPLE_MUSIC_KEY`. (Or
+   `npx wrangler secret put APPLE_MUSIC_KEY < AuthKey_XXXXXXXXXX.p8`.)
+
+If the key cannot be read, the Worker logs "Apple Music key could not be
+used" and falls back to the album page.
 
 ## Development
 

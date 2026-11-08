@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { LinkError, parseAppleMusicLink, parseLookup } from "../src/apple.ts";
-import { kick, violator } from "./fixtures/lookup.ts";
+import {
+  albumIdFromSongPage,
+  isoDurationMs,
+  LinkError,
+  parseAlbumPage,
+  parseAppleMusicLink,
+  parseMusicApiAlbum,
+} from "../src/apple.ts";
+import { kickApi, personalJesusPage, violatorApi, violatorPage } from "./fixtures/apple.ts";
 
 describe("parseAppleMusicLink", () => {
   it("reads the example album links", () => {
@@ -56,9 +63,9 @@ describe("parseAppleMusicLink", () => {
   });
 });
 
-describe("parseLookup", () => {
-  it("builds the album from the collection and its tracks", () => {
-    const album = parseLookup(violator.results, "ch");
+describe("parseMusicApiAlbum", () => {
+  it("builds the album from the API response", () => {
+    const album = parseMusicApiAlbum(violatorApi, "ch");
     expect(album).toMatchObject({
       appleId: "665404621",
       title: "Violator",
@@ -77,10 +84,52 @@ describe("parseLookup", () => {
   });
 
   it("sorts tracks by disc and number", () => {
-    expect(parseLookup(kick.results, "ch").tracks.map((t) => t.title)).toEqual(["Guns in the Sky", "Need You Tonight"]);
+    expect(parseMusicApiAlbum(kickApi, "ch").tracks.map((t) => `${t.disc}.${t.number} ${t.title}`)).toEqual([
+      "1.1 Guns in the Sky",
+      "1.2 Need You Tonight",
+      "2.1 Bonus",
+    ]);
   });
 
   it("fails when there is no album in the answer", () => {
-    expect(() => parseLookup([], "ch")).toThrow(/not available in the CH Apple Music store/);
+    expect(() => parseMusicApiAlbum({ data: [] }, "ch")).toThrow(/not available in the CH Apple Music store/);
+    expect(() => parseMusicApiAlbum(null, "ch")).toThrow(/not available/);
+  });
+});
+
+describe("album page fallback", () => {
+  it("reads the album from the page's JSON-LD", () => {
+    const album = parseAlbumPage(violatorPage, "665404621", "ch");
+    expect(album).toMatchObject({
+      appleId: "665404621",
+      title: "Violator",
+      artist: "Depeche Mode",
+      artistId: "148662",
+      releaseDate: "1990-03-19",
+      year: 1990,
+      genre: "Alternative",
+      trackCount: 9,
+      appleUrl: "https://music.apple.com/ch/album/violator/665404621",
+      artworkUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/bb/cc/example/source/{w}x{h}bb.jpg",
+    });
+    expect(album.tracks[5]).toEqual({ disc: 1, number: 6, title: "Enjoy the Silence", durationMs: 245000 });
+  });
+
+  it("fails when the page has no album", () => {
+    expect(() => parseAlbumPage("<html></html>", "1", "ch")).toThrow(/not available/);
+  });
+
+  it("finds the album of a song page", () => {
+    expect(albumIdFromSongPage(personalJesusPage)).toBe("665404621");
+    expect(albumIdFromSongPage('<a href="https://music.apple.com/ch/album/violator/665404621?i=1">')).toBe("665404621");
+    expect(albumIdFromSongPage("<html></html>")).toBe(null);
+  });
+
+  it("parses ISO durations", () => {
+    expect(isoDurationMs("PT4M27S")).toBe(267000);
+    expect(isoDurationMs("PT1H2M3S")).toBe(3723000);
+    expect(isoDurationMs("PT45S")).toBe(45000);
+    expect(isoDurationMs("PT")).toBe(null);
+    expect(isoDurationMs(5)).toBe(null);
   });
 });
