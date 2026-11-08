@@ -37,23 +37,31 @@ deployment set-up and the build order.
 
 ## Status
 
-- **Phase 0** (repo fixes, D1, previews, CI): done and deployed.
-- **Phase 1** (adding albums): code done. `POST /admin/albums` takes an Apple
-  Music link, looks the album up in the Swiss store, saves it with its tracks
-  and reports duplicates and restores. `/admin` is behind Cloudflare Access
-  and the Worker checks the Access JWT. To verify on a preview, then the
-  Shortcut ([docs/SHORTCUT.md](docs/SHORTCUT.md)).
+- **Phase 0** (repo fixes, D1, previews, CI): done.
+- **Phase 1** (adding albums): done. `POST /admin/albums` behind Cloudflare
+  Access; the iOS Shortcut ([docs/SHORTCUT.md](docs/SHORTCUT.md)) works.
+  Album details come from the album's Apple Music page until the Apple Music
+  API key is set up ([#5](https://github.com/gcameron00/albums/issues/5)).
+- **Phase 2** (public pages): cover grid and list, filters, search, album
+  pages with player and tracks, About, read-only JSON API.
 
-Next: Phase 2, the public pages. See [docs/PLAN.md](docs/PLAN.md), section 9.
+Next: Phase 3 (play view, random pick). See [docs/PLAN.md](docs/PLAN.md),
+section 9.
 
 ## Routes
 
 | Route | Method | Access | Returns |
 | --- | --- | --- | --- |
-| `/` | GET | public | Home page (placeholder with the album count) |
+| `/` | GET | public | Cover grid of listed albums. Parameters: `q` (search artist, album and track names), `artist`, `decade` (e.g. `1980`), `genre`, `sort` (`added`, `artist`, `year`, `title`), `view` (`grid`, `list`), `page` |
+| `/albums/:id` | GET | public | One album: cover, note, Apple Music player, tracks, more by the artist. 404 if removed |
+| `/about` | GET | public | What the list is |
+| `/api/albums` | GET | public | The list as JSON, same parameters as `/`; `{total, page, page_size, albums}`. CORS open |
+| `/api/albums/:id` | GET | public | One album with `tracks` as JSON |
 | `/health` | GET | public | `{"ok":true}` |
 | `/admin` | GET | Access | Who is signed in |
 | `/admin/albums` | POST | Access | Add an album. JSON body `{"url": "<Apple Music link>", "note": "…", "source": "web\|shortcut\|mcp"}`; answers `{outcome, summary, album}` (see [docs/SHORTCUT.md](docs/SHORTCUT.md)) |
+
+Removed albums never appear on public pages or in the API.
 
 ## Deployment
 

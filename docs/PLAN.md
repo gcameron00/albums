@@ -205,7 +205,7 @@ Public pages, server-rendered, light/dark, works on a phone.
 | `/?view=list` | Compact table: artist, title, year, genre, length, added. Good for scanning a long list. |
 | `/?view=play` | Apple Music embed per album (`https://embed.music.apple.com/ch/album/<id>`). Iframes are heavy, so 12 per page and lazy-loaded (`loading="lazy"`, real iframe swapped in on scroll/click). |
 | `/albums/:id` | One album: big artwork, the embed player, track list, note, added date, links to Apple Music and to the artist's other listed albums. |
-| `/artists/:artistId` | Listed albums by one artist. |
+| `/?artist=<name>` | Listed albums by one artist (artist links point here; no separate artist route, since page-sourced albums have no artist id). |
 | `/random` | Redirects to a random listed album ("what shall I play?"). |
 | `/about` | What the list is and the rule for getting on it. |
 | `/api/albums`, `/api/albums/:id` | Same data as JSON (public, read-only; listed albums only, no removal data). |
@@ -294,8 +294,8 @@ filters.
 | Phase | Scope | Done when |
 | --- | --- | --- |
 | 0 | Repo fixes (section 2), D1 prod + preview, Workers Builds, CI, empty `/health` | A branch push gives a preview URL; `main` deploys to albums.gcameron.com. **Done** |
-| 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled. **Code done**; to verify on a preview |
-| 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop |
+| 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled. **Done** (Shortcut verified 2026-11-08) |
+| 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop. **Code done** (album pages already include the player) |
 | 3 | Play view with lazy Apple Music embeds; `/random` | Albums play in place |
 | 4 | Signed-in UI: add box, edit, remove, restore; `/admin/history` | Full lifecycle from the browser |
 | 5 | iOS Shortcut ([docs/SHORTCUT.md](SHORTCUT.md), drafted in Phase 1) | Share from Music app → notification "Added: …" |

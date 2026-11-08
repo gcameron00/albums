@@ -1,8 +1,10 @@
-import { addAlbum, describe, findByAppleId, restoreAlbum, SOURCES, type AlbumRow, type Source } from "./albums.ts";
+import { addAlbum, describe, findByAppleId, restoreAlbum, SOURCES, type Source } from "./albums.ts";
 import { albumIdFor, fetchAlbum, LinkError, LookupError, parseAppleMusicLink, type AppleSources } from "./apple.ts";
 import type { AuthEnv, Identity } from "./auth.ts";
 import type { MusicKeyEnv } from "./musicToken.ts";
+import { facets, getAlbum, listAlbums, moreByArtist, pageSize, parseListQuery, publicAlbum } from "./catalog.ts";
 import { escapeHtml, page } from "./html.ts";
+import { aboutPage, albumPage, listPage, notFoundPage } from "./pages.ts";
 
 export interface Env extends AuthEnv, MusicKeyEnv {
   DB: D1Database;
@@ -26,52 +28,22 @@ const SECURITY_HEADERS = {
 const MAX_BODY_BYTES = 8192;
 const MAX_NOTE_CHARS = 2000;
 
-function json(body: unknown, status = 200): Response {
+function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS },
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS, ...extra },
   });
 }
+
+/** Public, read-only JSON: any site may read it. */
+const publicJson = (body: unknown, status = 200) =>
+  json(body, status, { "cache-control": "public, max-age=60", "access-control-allow-origin": "*" });
 
 function html(body: string, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(body, {
     status,
     headers: { "content-type": "text/html; charset=utf-8", ...SECURITY_HEADERS, ...extra },
   });
-}
-
-/** Public shape of an album in API answers (no removal details). */
-function publicAlbum(a: AlbumRow) {
-  return {
-    id: a.id,
-    apple_id: a.apple_id,
-    title: a.title,
-    artist: a.artist,
-    year: a.year,
-    release_date: a.release_date,
-    genre: a.genre,
-    track_count: a.track_count,
-    duration_ms: a.duration_ms,
-    artwork_url: a.artwork_url,
-    apple_url: a.apple_url,
-    note: a.note,
-    added_at: a.added_at,
-  };
-}
-
-async function listedCount(env: Env): Promise<number> {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM albums WHERE status = 'listed'").first<{ n: number }>();
-  return row?.n ?? 0;
-}
-
-function homePage(count: number): string {
-  const label = count === 1 ? "1 album" : `${count} albums`;
-  return page(
-    "Albums",
-    `    <h1>Albums</h1>
-    <p>Albums worth playing from start to finish.</p>
-    <p>${escapeHtml(label)} so far. The list is on its way.</p>`,
-  );
 }
 
 function adminPage(who: Identity): string {
@@ -174,6 +146,57 @@ async function admin(request: Request, env: Env, deps: Deps, url: URL): Promise<
   return json({ error: "Not found." }, 404);
 }
 
+/** Positive integer id from a path segment, or null. */
+function idParam(segment: string | undefined): number | null {
+  return segment && /^[1-9]\d{0,9}$/.test(segment) ? Number(segment) : null;
+}
+
+/** Public pages and the read-only API. Null when the path is not one of them. */
+async function publicRoute(env: Env, url: URL): Promise<Response | null> {
+  const path = url.pathname;
+  const storefront = env.STOREFRONT || "ch";
+
+  if (path === "/health") return json({ ok: true });
+
+  if (path === "/") {
+    const q = parseListQuery(url.searchParams);
+    const [f, result] = await Promise.all([facets(env.DB), listAlbums(env.DB, q)]);
+    return html(listPage(q, f, result));
+  }
+
+  if (path === "/about") return html(aboutPage());
+
+  const albumMatch = path.match(/^\/albums\/([^/]+)\/?$/);
+  if (albumMatch) {
+    const id = idParam(albumMatch[1]);
+    const found = id === null ? null : await getAlbum(env.DB, id);
+    if (!found) return html(notFoundPage(), 404);
+    const more = await moreByArtist(env.DB, found.album);
+    return html(albumPage(found.album, found.tracks, more, storefront));
+  }
+
+  if (path === "/api/albums") {
+    const q = parseListQuery(url.searchParams);
+    const result = await listAlbums(env.DB, q);
+    return publicJson({
+      total: result.total,
+      page: q.page,
+      page_size: pageSize(q.view),
+      albums: result.albums.map(publicAlbum),
+    });
+  }
+
+  const apiMatch = path.match(/^\/api\/albums\/([^/]+)$/);
+  if (apiMatch) {
+    const id = idParam(apiMatch[1]);
+    const found = id === null ? null : await getAlbum(env.DB, id);
+    if (!found) return publicJson({ error: "Not found." }, 404);
+    return publicJson({ ...publicAlbum(found.album), tracks: found.tracks });
+  }
+
+  return null;
+}
+
 export async function handle(request: Request, env: Env, deps: Deps): Promise<Response> {
   const url = new URL(request.url);
   const method = request.method;
@@ -182,14 +205,13 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
     return admin(request, env, deps, url);
   }
 
-  if (url.pathname === "/health" && (method === "GET" || method === "HEAD")) {
-    return json({ ok: true });
+  if (method === "GET" || method === "HEAD") {
+    const response = await publicRoute(env, url);
+    if (response) return response;
   }
 
-  if (url.pathname === "/" && (method === "GET" || method === "HEAD")) {
-    return html(homePage(await listedCount(env)));
-  }
-
-  // Static files under public/ (CSS, favicon) and their 404s.
-  return env.ASSETS.fetch(request);
+  // Static files under public/ (CSS, JS, favicon); anything else is a 404 page.
+  const asset = await env.ASSETS.fetch(request);
+  if (asset.status === 404 && !url.pathname.startsWith("/assets/")) return html(notFoundPage(), 404);
+  return asset;
 }

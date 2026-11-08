@@ -82,9 +82,9 @@ describe("public routes", () => {
 
   it("renders the home page with the album count", async () => {
     const { run } = setup();
-    expect(await (await run(get("/"))).text()).toContain("0 albums so far");
+    expect(await (await run(get("/"))).text()).toContain("Nothing on the list yet.");
     await run(add({ url: VIOLATOR }));
-    expect(await (await run(get("/"))).text()).toContain("1 album so far");
+    expect(await (await run(get("/"))).text()).toContain("1 album worth playing from start to finish");
   });
 
   it("passes other paths to static assets", async () => {
