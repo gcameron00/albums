@@ -182,6 +182,12 @@ used" and falls back to the album page.
 `wrangler d1 migrations apply PREVIEW_DB` before `wrangler preview`. If it
 does not, the non-production deploy command is not `npm run preview`.
 
+Each branch's preview keeps the settings it was created with. **Previews
+Base** (Settings → Builds) only sets the default for new previews; an
+existing preview has its own **Preview command** on its own settings page
+(Workers & Pages → `albums` → that preview → Settings), which must also be
+`npm run preview`.
+
 ## Development
 
 ```sh
