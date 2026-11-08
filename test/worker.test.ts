@@ -82,9 +82,9 @@ describe("public routes", () => {
 
   it("renders the home page with the album count", async () => {
     const { run } = setup();
-    expect(await (await run(get("/"))).text()).toContain("0 albums so far");
+    expect(await (await run(get("/"))).text()).toContain("Nothing on the list yet.");
     await run(add({ url: VIOLATOR }));
-    expect(await (await run(get("/"))).text()).toContain("1 album so far");
+    expect(await (await run(get("/"))).text()).toContain("1 album worth playing from start to finish");
   });
 
   it("passes other paths to static assets", async () => {
@@ -121,7 +121,7 @@ describe("admin access", () => {
 });
 
 describe("POST /admin/albums", () => {
-  it("adds an album from the Apple Music API, with its tracks and an event", async () => {
+  it("adds an album from the Apple Music API, with an event", async () => {
     const { run, sqlite, apiCalls, pages, headers } = setup();
     const res = await run(add({ url: VIOLATOR, note: "  Side two!  ", source: "shortcut" }));
     expect(res.status).toBe(201);
@@ -134,7 +134,7 @@ describe("POST /admin/albums", () => {
     expect(headers[0]?.get("authorization")).toBe("Bearer test-token");
     expect(headers[0]?.get("user-agent")).toBe("albums.gcameron.com/1.0 (+https://albums.gcameron.com)");
 
-    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM tracks").get()).toEqual({ n: 9 });
+    expect(sqlite.prepare("SELECT track_count, duration_ms FROM albums").get()).toEqual({ track_count: 9, duration_ms: 2196000 });
     expect(sqlite.prepare("SELECT action, source, at FROM events").all()).toEqual([
       { action: "added", source: "shortcut", at: "2026-11-08T16:00:00.000Z" },
     ]);
@@ -186,7 +186,7 @@ describe("POST /admin/albums", () => {
     expect(await res.json()).toMatchObject({ summary: "Added: Depeche Mode – Violator (1990)" });
     expect(apiCalls).toEqual([]);
     expect(pages).toEqual(["/ch/album/665404621?l=en-GB"]);
-    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM tracks").get()).toEqual({ n: 9 });
+    expect(sqlite.prepare("SELECT track_count, duration_ms FROM albums").get()).toEqual({ track_count: 9, duration_ms: 2196000 });
   });
 
   it("reads the album page when the Apple Music API refuses", async () => {

@@ -69,7 +69,7 @@ export async function restoreAlbum(
 
 /**
  * Adds an album, or reports it as already listed, or restores it if it was
- * removed. The album row, its tracks and the event are written in one batch.
+ * removed. The album row and the event are written in one batch.
  */
 export async function addAlbum(
   db: D1Database,
@@ -104,13 +104,6 @@ export async function addAlbum(
         opts.now,
         opts.source,
       ),
-    ...info.tracks.map((t) =>
-      db
-        .prepare(
-          `INSERT OR IGNORE INTO tracks (album_id, disc, number, title, duration_ms) VALUES (${ALBUM_ID}, ?, ?, ?, ?)`,
-        )
-        .bind(info.appleId, t.disc, t.number, t.title, t.durationMs),
-    ),
     db
       .prepare(`INSERT INTO events (album_id, action, at, source, detail) VALUES (${ALBUM_ID}, 'added', ?, ?, NULL)`)
       .bind(info.appleId, opts.now, opts.source),

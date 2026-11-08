@@ -16,13 +16,6 @@ export type AppleLink =
   | { type: "album"; id: string; trackId?: string }
   | { type: "song"; id: string };
 
-export interface Track {
-  disc: number;
-  number: number;
-  title: string;
-  durationMs: number | null;
-}
-
 export interface AlbumInfo {
   appleId: string;
   storefront: string;
@@ -33,11 +26,11 @@ export interface AlbumInfo {
   year: number | null;
   genre: string | null;
   trackCount: number | null;
+  /** Total length, from the track durations Apple reports. Tracks are not stored. */
   durationMs: number | null;
   /** Artwork URL with `{w}x{h}` in place of the size. */
   artworkUrl: string | null;
   appleUrl: string;
-  tracks: Track[];
 }
 
 /** The input is not a usable Apple Music album or song link. */
@@ -167,20 +160,11 @@ export function parseMusicApiAlbum(body: Json | null, storefront: string): Album
   const artist = str(a, "artistName");
   if (!appleId || !title || !artist) throw notInStore("album", storefront);
 
-  const tracks: Track[] = related(album, "tracks")
-    .map((t) => attrs(t))
-    .map((t) => ({
-      disc: num(t, "discNumber") ?? 1,
-      number: num(t, "trackNumber") ?? 0,
-      title: str(t, "name") ?? "",
-      durationMs: num(t, "durationInMillis"),
-    }))
-    .filter((t) => t.number > 0 && t.title !== "")
-    .sort((x, y) => x.disc - y.disc || x.number - y.number);
+  const tracks = related(album, "tracks");
 
   const genres = Array.isArray(a.genreNames) ? (a.genreNames as unknown[]).filter((g): g is string => typeof g === "string") : [];
   const artwork = typeof a.artwork === "object" && a.artwork ? str(a.artwork as Json, "url") : null;
-  const durations = tracks.map((t) => t.durationMs).filter((d): d is number => d !== null);
+  const durations = tracks.map((t) => num(attrs(t), "durationInMillis")).filter((d): d is number => d !== null);
   const url = str(a, "url");
 
   return {
@@ -195,7 +179,6 @@ export function parseMusicApiAlbum(body: Json | null, storefront: string): Album
     durationMs: durations.length ? durations.reduce((x, y) => x + y, 0) : null,
     artworkUrl: artwork ? artwork.replace(/\{w\}x\{h\}[a-z]*\.(jpg|png|webp)$/, "{w}x{h}bb.jpg") : null,
     appleUrl: url ? url.split("?")[0] : `https://music.apple.com/${storefront}/album/${appleId}`,
-    tracks,
   };
 }
 
@@ -282,9 +265,7 @@ export function parseAlbumPage(html: string, albumId: string, storefront: string
   const trackList = asList(album.tracks ?? album.track).flatMap((t) =>
     isType(t, "ItemList") ? asList(t.itemListElement).map((e) => asList(e.item)[0] ?? e) : [t],
   );
-  const tracks: Track[] = trackList
-    .map((t, i) => ({ disc: 1, number: i + 1, title: str(t, "name") ?? "", durationMs: isoDurationMs(t.duration) }))
-    .filter((t) => t.title !== "");
+  const tracks = trackList.filter((t) => str(t, "name") !== null);
 
   const published = str(album, "datePublished");
   const releaseDate = published && /^\d{4}-\d{2}-\d{2}/.test(published) ? published.slice(0, 10) : null;
@@ -292,7 +273,7 @@ export function parseAlbumPage(html: string, albumId: string, storefront: string
     ? ((album.genre as unknown[]).find((g): g is string => typeof g === "string" && g !== "Music") ?? null)
     : str(album, "genre");
   const image = typeof album.image === "string" ? album.image : (asList(album.image).map((i) => str(i, "url"))[0] ?? null);
-  const durations = tracks.map((t) => t.durationMs).filter((d): d is number => d !== null);
+  const durations = tracks.map((t) => isoDurationMs(t.duration)).filter((d): d is number => d !== null);
   const url = str(album, "url");
 
   return {
@@ -308,7 +289,6 @@ export function parseAlbumPage(html: string, albumId: string, storefront: string
     durationMs: durations.length ? durations.reduce((a, b) => a + b, 0) : null,
     artworkUrl: image ? image.replace(/\/\d+x\d+[a-z]*\.(jpg|png|webp)$/, "/{w}x{h}bb.jpg") : null,
     appleUrl: url ? url.split("?")[0] : `https://music.apple.com/${storefront}/album/${albumId}`,
-    tracks,
   };
 }
 

@@ -105,15 +105,6 @@ CREATE TABLE albums (
 CREATE INDEX albums_status_artist ON albums(status, artist);
 CREATE INDEX albums_status_year   ON albums(status, year);
 
-CREATE TABLE tracks (
-  album_id   INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
-  disc       INTEGER NOT NULL DEFAULT 1,
-  number     INTEGER NOT NULL,
-  title      TEXT NOT NULL,
-  duration_ms INTEGER,
-  PRIMARY KEY (album_id, disc, number)
-);
-
 CREATE TABLE events (                    -- append-only audit/history
   id        INTEGER PRIMARY KEY,
   album_id  INTEGER NOT NULL REFERENCES albums(id),
@@ -129,8 +120,10 @@ CREATE TABLE events (                    -- append-only audit/history
   removed, restored and removed again shows all three.
 - Adding an album that already exists: `listed` → "Already on the list";
   `removed` → offer to restore (Shortcut: restores and says so).
-- Tracks are stored so MCP can answer "which album has *Dreams* on it" and the
-  list can show running time, without calling Apple every time.
+- Track lists are not kept (decided 2026-11-08; `0002_drop_tracks.sql` drops
+  the table created in 0001). The Apple Music player on each album page
+  shows them, and albums are not searched by track. Only `track_count` and
+  `duration_ms` are stored, from the same lookup.
 
 ## 4. Adding albums
 
@@ -158,11 +151,11 @@ Two sources, in order (`src/apple.ts`):
    ES256 JWT signed in the Worker from a MusicKit key (`src/musicToken.ts`,
    12-hour tokens, cached). Gives name, artist, artist id, release date,
    genres, track count, artwork URL template (`{w}x{h}`), canonical URL and
-   tracks with disc/track numbers and durations.
+   track durations (summed into the album length).
 2. **Album page** — when the key is not configured or the API refuses, the
    Worker reads `music.apple.com/ch/album/<id>?l=en-GB` and takes the
-   schema.org `MusicAlbum` JSON-LD. No disc numbers there, so tracks are
-   numbered in order on disc 1.
+   schema.org `MusicAlbum` JSON-LD (track count and durations for the
+   length come from its track entries).
 
 The free lookup API (`itunes.apple.com/lookup`) is not used: it answers
 HTTP 403 with an empty body to requests from Cloudflare Workers, with or
@@ -201,11 +194,11 @@ Public pages, server-rendered, light/dark, works on a phone.
 
 | Route | What |
 | --- | --- |
-| `/` | Artwork grid (default view). Sort: recently added, artist, year, title. Filters: decade, genre. Search box (artist/title/track). Count in header. |
+| `/` | Artwork grid (default view). Sort: recently added, artist, year, title. Filters: decade, genre. Search box (artist/title). Count in header. |
 | `/?view=list` | Compact table: artist, title, year, genre, length, added. Good for scanning a long list. |
 | `/?view=play` | Apple Music embed per album (`https://embed.music.apple.com/ch/album/<id>`). Iframes are heavy, so 12 per page and lazy-loaded (`loading="lazy"`, real iframe swapped in on scroll/click). |
-| `/albums/:id` | One album: big artwork, the embed player, track list, note, added date, links to Apple Music and to the artist's other listed albums. |
-| `/artists/:artistId` | Listed albums by one artist. |
+| `/albums/:id` | One album: big artwork, the embed player (which lists the tracks), note, added date, links to Apple Music and to the artist's other listed albums. |
+| `/?artist=<name>` | Listed albums by one artist (artist links point here; no separate artist route, since page-sourced albums have no artist id). |
 | `/random` | Redirects to a random listed album ("what shall I play?"). |
 | `/about` | What the list is and the rule for getting on it. |
 | `/api/albums`, `/api/albums/:id` | Same data as JSON (public, read-only; listed albums only, no removal data). |
@@ -254,9 +247,9 @@ Tools (MCP SDK via `agents` / `createMcpHandler`, stateless):
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
-| `search_albums` | read | Text search over artist, title, track names; filters for year range, decade, genre, status. |
+| `search_albums` | read | Text search over artist and title; filters for year range, decade, genre, status. |
 | `list_albums` | read | Paged list with sort (added, artist, year). |
-| `get_album` | read | Full record with tracks, note, events, links. |
+| `get_album` | read | Full record with note, events, links. |
 | `random_album` | read | One (or n) random listed albums, optional filters ("something from the 80s"). |
 | `list_history` | read | Removals/restores/edits, newest first. |
 | `get_stats` | read | Counts by decade, genre, artist; total running time; additions per month. |
@@ -294,8 +287,8 @@ filters.
 | Phase | Scope | Done when |
 | --- | --- | --- |
 | 0 | Repo fixes (section 2), D1 prod + preview, Workers Builds, CI, empty `/health` | A branch push gives a preview URL; `main` deploys to albums.gcameron.com. **Done** |
-| 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled. **Code done**; to verify on a preview |
-| 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop |
+| 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled. **Done** (Shortcut verified 2026-11-08) |
+| 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop. **Code done** (album pages already include the player) |
 | 3 | Play view with lazy Apple Music embeds; `/random` | Albums play in place |
 | 4 | Signed-in UI: add box, edit, remove, restore; `/admin/history` | Full lifecycle from the browser |
 | 5 | iOS Shortcut ([docs/SHORTCUT.md](SHORTCUT.md), drafted in Phase 1) | Share from Music app → notification "Added: …" |
