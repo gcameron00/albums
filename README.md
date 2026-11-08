@@ -49,22 +49,35 @@ deployment set-up and the build order.
   (12 per page, loaded as they scroll into view); `/random` and *Play
   something* open a random album, keeping the current filters.
 
-Next: Phase 4 (signed-in add, edit, remove, restore and the private
-history). See [docs/PLAN.md](docs/PLAN.md), section 9.
+- **Phase 4** (owner pages): `/admin` add form, edit page per album (note,
+  remove with a private reason), private history with *Put back*; list view
+  sortable by column heading.
+
+Next: Phase 6, the MCP server (Phase 5, the Shortcut, already works). See
+[docs/PLAN.md](docs/PLAN.md), section 9.
 
 ## Routes
 
 | Route | Method | Access | Returns |
 | --- | --- | --- | --- |
-| `/` | GET | public | Cover grid of listed albums. Parameters: `q` (search artist and album titles), `artist`, `decade` (e.g. `1980`), `genre`, `sort` (`added`, `artist`, `year`, `title`), `view` (`grid`, `list`, `play`), `page` |
+| `/` | GET | public | Cover grid of listed albums. Parameters: `q` (search artist and album titles), `artist`, `decade` (e.g. `1980`), `genre`, `sort` (`added`, `artist`, `year`, `title`), `dir` (`asc` or `desc`; defaults to newest first for `added`, A–Z or oldest first otherwise), `view` (`grid`, `list`, `play`), `page` |
 | `/albums/:id` | GET | public | One album: cover, facts, note, Apple Music player (which lists the tracks), more by the artist. 404 if removed |
 | `/random` | GET | public | Redirects to a random listed album; takes the same `q`, `artist`, `decade` and `genre` filters (back to the filtered list if none match) |
 | `/about` | GET | public | What the list is |
 | `/api/albums` | GET | public | The list as JSON, same parameters as `/`; `{total, page, page_size, albums}`. CORS open |
 | `/api/albums/:id` | GET | public | One album as JSON |
 | `/health` | GET | public | `{"ok":true}` |
-| `/admin` | GET | Access | Who is signed in |
-| `/admin/albums` | POST | Access | Add an album. JSON body `{"url": "<Apple Music link>", "note": "…", "source": "web\|shortcut\|mcp"}`; answers `{outcome, summary, album}` (see [docs/SHORTCUT.md](docs/SHORTCUT.md)) |
+| `/admin` | GET | Access | Add form (Apple Music link and optional note) |
+| `/admin/albums` | POST | Access | Add an album. Form, or JSON `{"url": "<Apple Music link>", "note": "…", "source": "web\|shortcut\|mcp"}` answered with `{outcome, summary, album}` (see [docs/SHORTCUT.md](docs/SHORTCUT.md)) |
+| `/admin/albums/:id` | GET, POST | Access | Edit page; POST saves the note (`note`; empty clears it) |
+| `/admin/albums/:id/remove` | POST | Access | Remove from the list, with an optional private `reason` |
+| `/admin/albums/:id/restore` | POST | Access | Put a removed album back |
+| `/admin/history` | GET | Access | Removed albums with reasons and *Put back*, and the change log |
+
+Owner writes take a form posted from these pages (answered with a redirect)
+or JSON (answered with JSON). Forms must come from this site
+(`Sec-Fetch-Site: same-origin` or a matching `Origin`). Album pages show an
+*Edit* link when the browser has a Cloudflare Access session cookie.
 
 Removed albums never appear on public pages or in the API.
 
