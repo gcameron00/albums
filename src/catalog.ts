@@ -10,7 +10,8 @@ export const SORTS: Record<Sort, string> = {
   title: "Title",
 };
 
-export type View = "grid" | "list";
+export type View = "grid" | "list" | "play";
+const VIEWS: readonly View[] = ["grid", "list", "play"];
 
 export interface ListQuery {
   q: string;
@@ -22,7 +23,8 @@ export interface ListQuery {
   page: number;
 }
 
-const PAGE_SIZE = { grid: 60, list: 200 } as const;
+/** Play shows Apple Music players, which are heavy, so fewer per page. */
+const PAGE_SIZE = { grid: 60, list: 200, play: 12 } as const;
 export const pageSize = (view: View) => PAGE_SIZE[view];
 
 /** Reads list parameters, falling back to defaults for anything odd. */
@@ -36,7 +38,7 @@ export function parseListQuery(params: URLSearchParams): ListQuery {
     genre: (params.get("genre") ?? "").trim().slice(0, 100),
     artist: (params.get("artist") ?? "").trim().slice(0, 200),
     sort: sort in SORTS ? (sort as Sort) : "added",
-    view: params.get("view") === "list" ? "list" : "grid",
+    view: VIEWS.includes(params.get("view") as View) ? (params.get("view") as View) : "grid",
     page: Number.isInteger(page) && page >= 1 && page <= 10_000 ? page : 1,
   };
 }
@@ -127,6 +129,12 @@ export async function facets(db: D1Database): Promise<Facets> {
       .all<{ genre: string; n: number }>(),
   ]);
   return { total: total?.n ?? 0, decades: decades.results ?? [], genres: genres.results ?? [] };
+}
+
+/** One random listed album matching the filters (search, decade, genre, artist); null if none. */
+export async function randomAlbum(db: D1Database, q: ListQuery): Promise<AlbumRow | null> {
+  const w = where(q);
+  return db.prepare(`SELECT * FROM albums WHERE ${w.sql} ORDER BY RANDOM() LIMIT 1`).bind(...w.binds).first<AlbumRow>();
 }
 
 /** A listed album; null if missing or removed. */

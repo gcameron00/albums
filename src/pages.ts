@@ -1,5 +1,5 @@
 import type { AlbumRow } from "./albums.ts";
-import { pageSize, queryParams, SORTS, type Facets, type ListQuery, type Sort } from "./catalog.ts";
+import { pageSize, queryParams, SORTS, type Facets, type ListQuery, type Sort, type View } from "./catalog.ts";
 import { artwork, formatAlbumTime, formatDate, plural } from "./format.ts";
 import { escapeHtml as e, page } from "./html.ts";
 
@@ -8,6 +8,20 @@ const listHref = (q: ListQuery, change: Partial<ListQuery> = {}) => {
   const p = queryParams(q, change).toString();
   return p ? `/?${p}` : "/";
 };
+/** /random with the current search and filters (not sort, view or page). */
+const randomHref = (q: ListQuery) => {
+  const p = queryParams(q, { sort: "added", view: "grid" }).toString();
+  return p ? `/random?${p}` : "/random";
+};
+const embedUrl = (a: AlbumRow, storefront: string) =>
+  `https://embed.music.apple.com/${storefront}/album/${encodeURIComponent(a.apple_id)}`;
+
+/** Apple Music player iframe; the browser loads it only when it nears the screen. */
+const player = (a: AlbumRow, storefront: string) =>
+  `<iframe src="${e(embedUrl(a, storefront))}" title="${e(`${a.title} on Apple Music`)}" height="450" loading="lazy"
+          allow="autoplay *; encrypted-media *; clipboard-write"
+          sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>`;
+
 const artistHref = (artist: string) => `/?${new URLSearchParams({ artist, sort: "year" })}`;
 
 function cover(a: AlbumRow, size: number, cls: string, lazy = true): string {
@@ -78,6 +92,20 @@ ${albums
       </table>`;
 }
 
+function players(albums: AlbumRow[], storefront: string): string {
+  return `      <ul class="players">
+${albums
+  .map(
+    (a) => `        <li>
+          <a class="player-head" href="${albumHref(a)}">${cover(a, 64, "thumb")}<span><span class="title">${e(a.title)}</span>
+          <span class="meta">${e(a.artist)}${a.year ? ` · ${a.year}` : ""}</span></span></a>
+          ${player(a, storefront)}
+        </li>`,
+  )
+  .join("\n")}
+      </ul>`;
+}
+
 function pager(q: ListQuery, total: number): string {
   const pages = Math.ceil(total / pageSize(q.view));
   if (pages <= 1) return "";
@@ -86,21 +114,24 @@ function pager(q: ListQuery, total: number): string {
   return `      <nav class="pager" aria-label="Pages">${prev}<span>Page ${q.page} of ${pages}</span>${next}</nav>`;
 }
 
-export function listPage(q: ListQuery, f: Facets, result: { total: number; albums: AlbumRow[] }): string {
+export function listPage(q: ListQuery, f: Facets, result: { total: number; albums: AlbumRow[] }, storefront: string): string {
   const filtered = Boolean(q.q || q.decade || q.genre || q.artist);
   const heading = q.artist || "Albums";
   const summary = filtered
     ? `${plural(result.total, "album")} of ${f.total}${q.artist ? "" : " match"}`
     : `${plural(f.total, "album")} worth playing from start to finish`;
-  const views = `<span class="views"><a href="${e(listHref(q, { view: "grid", page: q.page }))}"${
-    q.view === "grid" ? ' aria-current="true"' : ""
-  }>Covers</a> <a href="${e(listHref(q, { view: "list", page: q.page }))}"${q.view === "list" ? ' aria-current="true"' : ""}>List</a></span>`;
+  const viewLink = (view: View, label: string) =>
+    `<a href="${e(listHref(q, { view }))}"${q.view === view ? ' aria-current="true"' : ""}>${label}</a>`;
+  const views = `<a class="random" href="${e(randomHref(q))}">Play something</a><span class="views">${viewLink("grid", "Covers")} ${viewLink(
+    "list",
+    "List",
+  )} ${viewLink("play", "Players")}</span>`;
 
   let content: string;
   if (f.total === 0) content = `      <p class="empty">Nothing on the list yet.</p>`;
   else if (result.albums.length === 0)
     content = `      <p class="empty">No albums match. <a href="${e(listHref({ ...q, q: "", decade: null, genre: "", artist: "" }))}">Show all</a></p>`;
-  else content = q.view === "list" ? table(result.albums) : grid(result.albums);
+  else content = q.view === "list" ? table(result.albums) : q.view === "play" ? players(result.albums, storefront) : grid(result.albums);
 
   return page(
     q.artist ? `${q.artist} – Albums` : "Albums",
@@ -131,7 +162,6 @@ export function albumPage(a: AlbumRow, more: AlbumRow[], storefront: string): st
     a.track_count ? plural(a.track_count, "track") : "",
     formatAlbumTime(a.duration_ms),
   ].filter(Boolean);
-  const embed = `https://embed.music.apple.com/${storefront}/album/${encodeURIComponent(a.apple_id)}`;
   const og = artwork(a.artwork_url, 600);
   return page(
     `${a.title} – ${a.artist}`,
@@ -146,9 +176,7 @@ ${a.note ? `          <div class="note">${noteHtml(a.note)}</div>\n` : ""}      
         </div>
       </article>
       <section class="player" aria-label="Player">
-        <iframe src="${e(embed)}" title="${e(`${a.title} on Apple Music`)}" height="450" loading="lazy"
-          allow="autoplay *; encrypted-media *; clipboard-write"
-          sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>
+        ${player(a, storefront)}
       </section>
 ${
       more.length

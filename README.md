@@ -45,15 +45,20 @@ deployment set-up and the build order.
 - **Phase 2** (public pages): cover grid and list, filters, search, album
   pages with player, About, read-only JSON API.
 
-Next: Phase 3 (play view, random pick). See [docs/PLAN.md](docs/PLAN.md),
-section 9.
+- **Phase 3** (play): `?view=play` shows an Apple Music player per album
+  (12 per page, loaded as they scroll into view); `/random` and *Play
+  something* open a random album, keeping the current filters.
+
+Next: Phase 4 (signed-in add, edit, remove, restore and the private
+history). See [docs/PLAN.md](docs/PLAN.md), section 9.
 
 ## Routes
 
 | Route | Method | Access | Returns |
 | --- | --- | --- | --- |
-| `/` | GET | public | Cover grid of listed albums. Parameters: `q` (search artist and album titles), `artist`, `decade` (e.g. `1980`), `genre`, `sort` (`added`, `artist`, `year`, `title`), `view` (`grid`, `list`), `page` |
+| `/` | GET | public | Cover grid of listed albums. Parameters: `q` (search artist and album titles), `artist`, `decade` (e.g. `1980`), `genre`, `sort` (`added`, `artist`, `year`, `title`), `view` (`grid`, `list`, `play`), `page` |
 | `/albums/:id` | GET | public | One album: cover, facts, note, Apple Music player (which lists the tracks), more by the artist. 404 if removed |
+| `/random` | GET | public | Redirects to a random listed album; takes the same `q`, `artist`, `decade` and `genre` filters (back to the filtered list if none match) |
 | `/about` | GET | public | What the list is |
 | `/api/albums` | GET | public | The list as JSON, same parameters as `/`; `{total, page, page_size, albums}`. CORS open |
 | `/api/albums/:id` | GET | public | One album as JSON |
