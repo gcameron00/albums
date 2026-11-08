@@ -17,6 +17,7 @@ import { publicAlbum, recentEvents, removedAlbums, type EventRow } from "./catal
 import { artwork, formatDate } from "./format.ts";
 import { escapeHtml as e, page } from "./html.ts";
 import { html, json, readBody, redirect, type Body } from "./http.ts";
+import { authorize } from "./oauth.ts";
 import { flash } from "./pages.ts";
 import type { Deps, Env } from "./app.ts";
 
@@ -176,7 +177,7 @@ ${log}`,
 // Actions
 
 /** Adds from an Apple Music link, reports a duplicate, or restores a removed album. */
-async function addFromLink(env: Env, deps: Deps, link: string, note: string | null, source: Source): Promise<AddResult> {
+export async function addFromLink(env: Env, deps: Deps, link: string, note: string | null, source: Source): Promise<AddResult> {
   const storefront = env.STOREFRONT || "ch";
   const now = deps.now().toISOString();
   const apple: AppleSources = { fetch: deps.fetch, musicToken: () => deps.musicToken(env) };
@@ -269,6 +270,7 @@ export async function admin(request: Request, env: Env, deps: Deps, url: URL): P
   const notAllowed = () => json({ error: "Method not allowed." }, 405);
 
   if (path === "/admin") return get ? adminHtml(adminHome(who)) : notAllowed();
+  if (path === "/admin/authorize") return authorize(request, env, url, who);
   if (path === "/admin/history") {
     if (!get) return notAllowed();
     const [removed, events] = await Promise.all([removedAlbums(env.DB), recentEvents(env.DB)]);

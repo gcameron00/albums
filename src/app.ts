@@ -3,9 +3,10 @@ import type { AuthEnv, Identity } from "./auth.ts";
 import { facets, getAlbum, listAlbums, moreByArtist, pageSize, parseListQuery, publicAlbum, queryParams, randomAlbum } from "./catalog.ts";
 import { html, json, SECURITY_HEADERS } from "./http.ts";
 import type { MusicKeyEnv } from "./musicToken.ts";
+import type { OAuthEnv } from "./oauth.ts";
 import { aboutPage, ALBUM_MESSAGES, albumPage, listPage, notFoundPage } from "./pages.ts";
 
-export interface Env extends AuthEnv, MusicKeyEnv {
+export interface Env extends AuthEnv, MusicKeyEnv, OAuthEnv {
   DB: D1Database;
   ASSETS: Fetcher;
   STOREFRONT: string;

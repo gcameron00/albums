@@ -155,6 +155,16 @@ export async function randomAlbum(db: D1Database, q: ListQuery): Promise<AlbumRo
   return db.prepare(`SELECT * FROM albums WHERE ${w.sql} ORDER BY RANDOM() LIMIT 1`).bind(...w.binds).first<AlbumRow>();
 }
 
+/** Up to `count` distinct random listed albums matching the filters. */
+export async function randomAlbums(db: D1Database, q: ListQuery, count: number): Promise<AlbumRow[]> {
+  const w = where(q);
+  const rows = await db
+    .prepare(`SELECT * FROM albums WHERE ${w.sql} ORDER BY RANDOM() LIMIT ?`)
+    .bind(...w.binds, count)
+    .all<AlbumRow>();
+  return rows.results ?? [];
+}
+
 /** A listed album; null if missing or removed. */
 export async function getAlbum(db: D1Database, id: number): Promise<AlbumRow | null> {
   return db.prepare("SELECT * FROM albums WHERE id = ? AND status = 'listed'").bind(id).first<AlbumRow>();

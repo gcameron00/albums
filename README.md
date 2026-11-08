@@ -53,8 +53,10 @@ deployment set-up and the build order.
   remove with a private reason), private history with *Put back*; list view
   sortable by column heading.
 
-Next: Phase 6, the MCP server (Phase 5, the Shortcut, already works). See
-[docs/PLAN.md](docs/PLAN.md), section 9.
+- **Phase 6** (MCP): `/mcp` for Claude, OAuth with the Access PIN and a
+  consent page. See [Connecting Claude](#connecting-claude).
+
+Next: nice-to-haves (Phase 7). See [docs/PLAN.md](docs/PLAN.md), section 9.
 
 ## Routes
 
@@ -73,6 +75,9 @@ Next: Phase 6, the MCP server (Phase 5, the Shortcut, already works). See
 | `/admin/albums/:id/remove` | POST | Access | Remove from the list, with an optional private `reason` |
 | `/admin/albums/:id/restore` | POST | Access | Put a removed album back |
 | `/admin/history` | GET | Access | Removed albums with reasons and *Put back*, and the change log |
+| `/admin/authorize` | GET, POST | Access | OAuth consent page for connecting Claude |
+| `/mcp` | POST | OAuth token | MCP server (see [Connecting Claude](#connecting-claude)) |
+| `/oauth/register`, `/oauth/token`, `/.well-known/oauth-authorization-server` | | public | OAuth endpoints and metadata, handled by `@cloudflare/workers-oauth-provider` |
 
 Owner writes take a form posted from these pages (answered with a redirect)
 or JSON (answered with JSON). Forms must come from this site
@@ -80,6 +85,28 @@ or JSON (answered with JSON). Forms must come from this site
 *Edit* link when the browser has a Cloudflare Access session cookie.
 
 Removed albums never appear on public pages or in the API.
+
+## Connecting Claude
+
+The site is an MCP server at `https://albums.gcameron.com/mcp`.
+
+1. In Claude: **Settings → Connectors → Add custom connector**. Name it
+   `Albums` and use the URL `https://albums.gcameron.com/mcp`. No client ID or
+   secret is needed; Claude registers itself.
+2. **Connect**. Claude opens `albums.gcameron.com/admin/authorize`; Cloudflare
+   Access asks for the one-time PIN, then a page asks whether to connect
+   *Claude*. Choose **Allow**.
+3. Enable the connector in a chat and ask, for example, "pick an album from
+   the 80s", "what's on my list by INXS?", or "add this:
+   https://music.apple.com/ch/album/…".
+
+Tools: `search_albums`, `get_album`, `random_album`, `get_stats`,
+`list_history`, `add_album`, `update_note`, `remove_album`, `restore_album`
+(details in [docs/PLAN.md](docs/PLAN.md), section 7). Changes made through
+Claude show as `mcp` in the history.
+
+To disconnect, remove the connector in Claude. Tokens are kept in the
+`albums-oauth` KV namespace; deleting its keys revokes every connection.
 
 ## Deployment
 
