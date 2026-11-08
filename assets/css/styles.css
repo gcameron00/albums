@@ -1,0 +1,30 @@
+:root {
+  color-scheme: light dark;
+  --color-bg: #ffffff;
+  --color-text: #1e293b;
+  --color-muted: #64748b;
+  --color-accent: #2563eb;
+  --color-border: #e2e8f0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0f172a;
+    --color-text: #e2e8f0;
+    --color-muted: #94a3b8;
+    --color-accent: #60a5fa;
+    --color-border: #1e293b;
+  }
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  margin: 2rem;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+a {
+  text-decoration: none;
+  color: var(--color-accent);
+}

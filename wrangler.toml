@@ -1,0 +1,10 @@
+# Used only when the site was created with the "Workers" deploy target.
+# The name is overridden at deploy time via `wrangler deploy --name <repo-name>`
+# by .github/workflows/deploy.yml. Pages-target sites ignore this file
+# (it has no pages_build_output_dir).
+name = "generic-website"
+compatibility_date = "2026-07-01"
+workers_dev = true
+
+[assets]
+directory = "."

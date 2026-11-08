@@ -1,0 +1,84 @@
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) && contains(github.event.issue.labels.*.name, 'enhancement') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read # Required for Claude to read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GH_PAT }}
+
+      - name: Merge Claude's PR
+        if: always() && github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          # Poll issue comments for Claude's compare URL (e.g. .../compare/main...claude/issue-4-xxx?quick_pull=1&title=...)
+          COMPARE_URL=""
+          BRANCH=""
+          for i in $(seq 1 24); do
+            COMPARE_URL=$(gh api "repos/$GH_REPO/issues/$ISSUE_NUMBER/comments" \
+              --jq '[.[] | .body] | add // ""' \
+              | grep -o 'compare/[^?)" ]*' \
+              | head -1 || true)
+            if [ -n "$COMPARE_URL" ]; then
+              BRANCH=$(echo "$COMPARE_URL" | sed 's/^compare\///' | sed 's/^[^.]*\.\.\.//')
+              echo "Found branch: $BRANCH"
+              break
+            fi
+            echo "Waiting for Claude's comment... attempt $i/24"
+            sleep 5
+          done
+
+          if [ -z "$BRANCH" ]; then
+            echo "No Claude branch found in issue comments after 120s — skipping"
+            exit 0
+          fi
+
+          # Create PR if Claude didn't open one automatically
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number // empty')
+          if [ -z "$PR_NUMBER" ]; then
+            PR_URL=$(gh pr create \
+              --head "$BRANCH" \
+              --base main \
+              --title "Claude changes for issue #$ISSUE_NUMBER" \
+              --body "Closes #$ISSUE_NUMBER")
+            PR_NUMBER=$(echo "$PR_URL" | grep -o '[0-9]*$')
+            echo "Created PR #$PR_NUMBER"
+          else
+            echo "Found existing PR #$PR_NUMBER"
+          fi
+
+          echo "Merging PR #$PR_NUMBER"
+          gh pr merge "$PR_NUMBER" --merge --delete-branch

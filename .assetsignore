@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+.assetsignore
+wrangler.toml
+README.md
+LICENSE
+# wrangler-action installs wrangler into the checkout at deploy time;
+# without these the 122 MiB workerd binary fails the 25 MiB asset limit
+node_modules
+package.json
+package-lock.json
+.wrangler
