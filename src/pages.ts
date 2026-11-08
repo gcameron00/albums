@@ -1,6 +1,6 @@
 import type { AlbumRow } from "./albums.ts";
-import { pageSize, queryParams, SORTS, type Facets, type ListQuery, type Sort, type TrackRow } from "./catalog.ts";
-import { artwork, formatAlbumTime, formatDate, formatTrackTime, plural } from "./format.ts";
+import { pageSize, queryParams, SORTS, type Facets, type ListQuery, type Sort } from "./catalog.ts";
+import { artwork, formatAlbumTime, formatDate, plural } from "./format.ts";
 import { escapeHtml as e, page } from "./html.ts";
 
 const albumHref = (a: AlbumRow) => `/albums/${a.id}`;
@@ -117,27 +117,6 @@ ${pager(q, result.total)}`,
 // ---------------------------------------------------------------------------
 // One album
 
-function trackList(tracks: TrackRow[]): string {
-  if (tracks.length === 0) return "";
-  const discs = [...new Set(tracks.map((t) => t.disc))];
-  const rows = (list: TrackRow[]) =>
-    list
-      .map(
-        (t) =>
-          `          <li><span class="n">${t.number}</span><span class="t">${e(t.title)}</span><span class="d">${e(
-            formatTrackTime(t.duration_ms),
-          )}</span></li>`,
-      )
-      .join("\n");
-  return discs
-    .map(
-      (disc) => `${discs.length > 1 ? `      <h3>Disc ${disc}</h3>\n` : ""}      <ol class="tracks">
-${rows(tracks.filter((t) => t.disc === disc))}
-      </ol>`,
-    )
-    .join("\n");
-}
-
 function noteHtml(note: string): string {
   return note
     .split(/\n{2,}/)
@@ -145,7 +124,7 @@ function noteHtml(note: string): string {
     .join("");
 }
 
-export function albumPage(a: AlbumRow, tracks: TrackRow[], more: AlbumRow[], storefront: string): string {
+export function albumPage(a: AlbumRow, more: AlbumRow[], storefront: string): string {
   const facts = [
     a.year ? String(a.year) : "",
     a.genre ?? "",
@@ -171,7 +150,7 @@ ${a.note ? `          <div class="note">${noteHtml(a.note)}</div>\n` : ""}      
           allow="autoplay *; encrypted-media *; clipboard-write"
           sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>
       </section>
-${tracks.length ? `      <section aria-labelledby="tracks"><h2 id="tracks">Tracks</h2>\n${trackList(tracks)}\n      </section>\n` : ""}${
+${
       more.length
         ? `      <section aria-labelledby="more"><h2 id="more">More by ${e(a.artist)}</h2>\n${grid(more)}\n      </section>\n`
         : ""

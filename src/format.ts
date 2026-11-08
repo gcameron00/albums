@@ -8,13 +8,6 @@ export function formatDate(iso: string | null): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
-/** Track length: 245000 → "4:05". */
-export function formatTrackTime(ms: number | null): string {
-  if (ms === null || ms < 0) return "";
-  const s = Math.round(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
 /** Album length: 2819000 → "47 min"; 4320000 → "1 h 12 min". */
 export function formatAlbumTime(ms: number | null): string {
   if (ms === null || ms <= 0) return "";

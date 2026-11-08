@@ -132,8 +132,4 @@ table.albums td:nth-child(1) a { color: var(--text); }
 .player { margin-top: 2rem; }
 .player iframe { width: 100%; max-width: 660px; height: 450px; border: 0; border-radius: 10px; overflow: hidden; background: transparent; }
 
-.tracks { list-style: none; margin: 0; padding: 0; max-width: 40rem; }
-.tracks li { display: grid; grid-template-columns: 2rem 1fr auto; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
-.tracks .n, .tracks .d { color: var(--muted); font-variant-numeric: tabular-nums; }
-
 .prose { max-width: 40rem; }

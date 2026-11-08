@@ -4,7 +4,7 @@ import { handle, type Deps, type Env } from "../src/app.ts";
 import type { AlbumInfo } from "../src/apple.ts";
 import { parseMusicApiAlbum } from "../src/apple.ts";
 import { parseListQuery, queryParams } from "../src/catalog.ts";
-import { formatAlbumTime, formatDate, formatTrackTime } from "../src/format.ts";
+import { formatAlbumTime, formatDate } from "../src/format.ts";
 import { createTestDb } from "./helpers/d1.ts";
 import { kickApi, violatorApi } from "./fixtures/apple.ts";
 
@@ -112,7 +112,7 @@ describe("list page", () => {
 });
 
 describe("album page", () => {
-  it("shows the album, note, player and tracks", async () => {
+  it("shows the album, note and player, without a track list", async () => {
     const { get, ids } = await setup();
     const res = await get(`/albums/${ids["665404621"]}`);
     expect(res.status).toBe(200);
@@ -121,16 +121,8 @@ describe("album page", () => {
     expect(html).toContain("1990 · Alternative · 9 tracks · 37 min");
     expect(html).toContain("<p>Side two &lt;b&gt;is&lt;/b&gt; perfect.<br>Every time.</p>");
     expect(html).toContain('src="https://embed.music.apple.com/ch/album/665404621"');
-    expect(html).toContain('<span class="t">Enjoy the Silence</span><span class="d">4:05</span>');
     expect(html).toContain("On the list since 8 Nov 2026");
-    expect(html).not.toContain("<h3>Disc 1</h3>");
-  });
-
-  it("heads each disc when there is more than one", async () => {
-    const { text, ids } = await setup();
-    const html = await text(`/albums/${ids["1440855131"]}`);
-    expect(html).toContain("<h3>Disc 1</h3>");
-    expect(html).toContain("<h3>Disc 2</h3>");
+    expect(html).not.toContain("Enjoy the Silence");
   });
 
   it("is 404 for removed, missing and malformed ids", async () => {
@@ -193,7 +185,6 @@ describe("format", () => {
   it("formats dates and lengths", () => {
     expect(formatDate("2026-11-08T16:00:00.000Z")).toBe("8 Nov 2026");
     expect(formatDate(null)).toBe("");
-    expect(formatTrackTime(245000)).toBe("4:05");
     expect(formatAlbumTime(2819000)).toBe("47 min");
     expect(formatAlbumTime(4320000)).toBe("1 h 12 min");
   });

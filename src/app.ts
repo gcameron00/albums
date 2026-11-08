@@ -172,7 +172,7 @@ async function publicRoute(env: Env, url: URL): Promise<Response | null> {
     const found = id === null ? null : await getAlbum(env.DB, id);
     if (!found) return html(notFoundPage(), 404);
     const more = await moreByArtist(env.DB, found.album);
-    return html(albumPage(found.album, found.tracks, more, storefront));
+    return html(albumPage(found.album, more, storefront));
   }
 
   if (path === "/api/albums") {

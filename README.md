@@ -53,7 +53,7 @@ section 9.
 | Route | Method | Access | Returns |
 | --- | --- | --- | --- |
 | `/` | GET | public | Cover grid of listed albums. Parameters: `q` (search artist, album and track names), `artist`, `decade` (e.g. `1980`), `genre`, `sort` (`added`, `artist`, `year`, `title`), `view` (`grid`, `list`), `page` |
-| `/albums/:id` | GET | public | One album: cover, note, Apple Music player, tracks, more by the artist. 404 if removed |
+| `/albums/:id` | GET | public | One album: cover, facts, note, Apple Music player (which lists the tracks), more by the artist. 404 if removed |
 | `/about` | GET | public | What the list is |
 | `/api/albums` | GET | public | The list as JSON, same parameters as `/`; `{total, page, page_size, albums}`. CORS open |
 | `/api/albums/:id` | GET | public | One album with `tracks` as JSON |
