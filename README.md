@@ -143,8 +143,11 @@ Settings → Build):
 
 1. **Connect** the GitHub repo `gcameron00/albums`; production branch `main`.
 2. Build command: leave empty. Deploy command: `npm run deploy`.
-3. Enable **non-production branch builds** with deploy command
-   `npm run preview`.
+3. Enable **non-production branch builds** and set their own
+   **non-production branch deploy command** to `npm run preview`. It is a
+   separate field from the production deploy command (and from the build
+   command); left at its default, previews deploy without migrating
+   `albums-preview`, so new columns or tables are missing there.
 4. The build token needs Workers Scripts and D1 edit rights (the default
    token Workers Builds creates has them).
 
@@ -174,6 +177,10 @@ without one the Worker reads the album's music.apple.com page instead.
 
 If the key cannot be read, the Worker logs "Apple Music key could not be
 used" and falls back to the album page.
+
+**Checking a preview's migrations**: the preview build log should show
+`wrangler d1 migrations apply PREVIEW_DB` before `wrangler preview`. If it
+does not, the non-production deploy command is not `npm run preview`.
 
 ## Development
 
