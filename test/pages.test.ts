@@ -189,3 +189,37 @@ describe("format", () => {
     expect(formatAlbumTime(4320000)).toBe("1 h 12 min");
   });
 });
+
+describe("players view and random", () => {
+  it("shows a lazy Apple Music player per album, 12 per page", async () => {
+    const { text } = await setup();
+    const html = await text("/?view=play&sort=artist");
+    expect(html).toContain('<ul class="players">');
+    expect(html.match(/<iframe /g)?.length).toBe(4);
+    expect(html).toContain('src="https://embed.music.apple.com/ch/album/665404621"');
+    expect(html).toContain('loading="lazy"');
+    expect(html).toContain('<a href="/?sort=artist&amp;view=play" aria-current="true">Players</a>');
+  });
+
+  it("redirects to a random listed album, keeping filters", async () => {
+    const { get, ids } = await setup();
+    const res = await get("/random?decade=1990");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(`/albums/${ids["665404621"]}`);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const any = await get("/random");
+    expect(Object.values(ids).map((id) => `/albums/${id}`)).toContain(any.headers.get("location"));
+    expect(any.headers.get("location")).not.toBe(`/albums/${ids["10"]}`);
+  });
+
+  it("goes back to the filtered list when nothing matches", async () => {
+    const { get } = await setup();
+    const res = await get("/random?decade=1950");
+    expect(res.headers.get("location")).toBe("/?decade=1950");
+  });
+
+  it("links Play something with the current filters", async () => {
+    const { text } = await setup();
+    expect(await text("/?genre=Alternative&sort=year&view=list")).toContain('href="/random?genre=Alternative">Play something</a>');
+  });
+});

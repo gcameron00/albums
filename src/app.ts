@@ -2,7 +2,7 @@ import { addAlbum, describe, findByAppleId, restoreAlbum, SOURCES, type Source }
 import { albumIdFor, fetchAlbum, LinkError, LookupError, parseAppleMusicLink, type AppleSources } from "./apple.ts";
 import type { AuthEnv, Identity } from "./auth.ts";
 import type { MusicKeyEnv } from "./musicToken.ts";
-import { facets, getAlbum, listAlbums, moreByArtist, pageSize, parseListQuery, publicAlbum } from "./catalog.ts";
+import { facets, getAlbum, listAlbums, moreByArtist, pageSize, parseListQuery, publicAlbum, queryParams, randomAlbum } from "./catalog.ts";
 import { escapeHtml, page } from "./html.ts";
 import { aboutPage, albumPage, listPage, notFoundPage } from "./pages.ts";
 
@@ -161,10 +161,17 @@ async function publicRoute(env: Env, url: URL): Promise<Response | null> {
   if (path === "/") {
     const q = parseListQuery(url.searchParams);
     const [f, result] = await Promise.all([facets(env.DB), listAlbums(env.DB, q)]);
-    return html(listPage(q, f, result));
+    return html(listPage(q, f, result, storefront));
   }
 
   if (path === "/about") return html(aboutPage());
+
+  if (path === "/random") {
+    const q = parseListQuery(url.searchParams);
+    const album = await randomAlbum(env.DB, q);
+    const target = album ? `/albums/${album.id}` : `/?${queryParams(q)}`;
+    return new Response(null, { status: 302, headers: { location: target, "cache-control": "no-store", ...SECURITY_HEADERS } });
+  }
 
   const albumMatch = path.match(/^\/albums\/([^/]+)\/?$/);
   if (albumMatch) {

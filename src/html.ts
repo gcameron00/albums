@@ -39,6 +39,7 @@ export function page(title: string, body: string, opts: PageOptions = {}): strin
       <a class="brand" href="/">Albums</a>
       <nav>
         <a href="/"${current("albums")}>List</a>
+        <a href="/random">Random</a>
         <a href="/about"${current("about")}>About</a>
       </nav>
     </header>

@@ -196,10 +196,10 @@ Public pages, server-rendered, light/dark, works on a phone.
 | --- | --- |
 | `/` | Artwork grid (default view). Sort: recently added, artist, year, title. Filters: decade, genre. Search box (artist/title). Count in header. |
 | `/?view=list` | Compact table: artist, title, year, genre, length, added. Good for scanning a long list. |
-| `/?view=play` | Apple Music embed per album (`https://embed.music.apple.com/ch/album/<id>`). Iframes are heavy, so 12 per page and lazy-loaded (`loading="lazy"`, real iframe swapped in on scroll/click). |
+| `/?view=play` | Apple Music embed per album (`https://embed.music.apple.com/ch/album/<id>`). Iframes are heavy, so 12 per page with native `loading="lazy"`. |
 | `/albums/:id` | One album: big artwork, the embed player (which lists the tracks), note, added date, links to Apple Music and to the artist's other listed albums. |
 | `/?artist=<name>` | Listed albums by one artist (artist links point here; no separate artist route, since page-sourced albums have no artist id). |
-| `/random` | Redirects to a random listed album ("what shall I play?"). |
+| `/random` | Redirects to a random listed album ("what shall I play?"), honouring search and filters. Linked as *Random* in the header and *Play something* on the list. |
 | `/about` | What the list is and the rule for getting on it. |
 | `/api/albums`, `/api/albums/:id` | Same data as JSON (public, read-only; listed albums only, no removal data). |
 | `/admin/history` | **Owner only.** Removed albums (with reasons) and the change log, newest first, with Restore buttons. |
@@ -288,8 +288,8 @@ filters.
 | --- | --- | --- |
 | 0 | Repo fixes (section 2), D1 prod + preview, Workers Builds, CI, empty `/health` | A branch push gives a preview URL; `main` deploys to albums.gcameron.com. **Done** |
 | 1 | Schema, link parsing, iTunes lookup, `POST /admin/albums`, Access + JWT check | Adding by `curl` with a service token works, duplicates handled. **Done** (Shortcut verified 2026-11-08) |
-| 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop. **Code done** (album pages already include the player) |
-| 3 | Play view with lazy Apple Music embeds; `/random` | Albums play in place |
+| 2 | Public pages: grid, list, album, about; JSON API | List is browsable on phone and desktop. **Done** |
+| 3 | Play view with lazy Apple Music embeds; `/random` | Albums play in place. **Code done** |
 | 4 | Signed-in UI: add box, edit, remove, restore; `/admin/history` | Full lifecycle from the browser |
 | 5 | iOS Shortcut ([docs/SHORTCUT.md](SHORTCUT.md), drafted in Phase 1) | Share from Music app → notification "Added: …" |
 | 6 | MCP server + OAuth via Access; connector added in Claude | Claude can search, pick and add albums |
