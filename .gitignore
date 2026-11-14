@@ -4,13 +4,19 @@
 # Windows
 Thumbs.db
 
-# Node / build artifacts (safe to include even if unused)
+# Node / build output
 node_modules/
 dist/
 build/
+*.log
+
+# Wrangler local state and secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
 
 # Editor settings
 .vscode/
-# Wrangler
-.wrangler/
-.dev.vars
+.idea/
