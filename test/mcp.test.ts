@@ -178,3 +178,16 @@ describe("/mcp behind Access", () => {
     expect(sqlite.prepare("SELECT source FROM events ORDER BY id DESC").get()).toEqual({ source: "mcp" });
   });
 });
+
+describe("MCP routing text", () => {
+  it("tells clients this is the user's own album collection", async () => {
+    const { rpc } = await setup();
+    const init = (await rpc("initialize", { protocolVersion: "2025-06-18" })).body!.result as { instructions: string };
+    expect(init.instructions).toContain("The user's curated personal album collection");
+    expect(init.instructions).toContain('"my albums"');
+    const tools = (await rpc("tools/list")).body!.result.tools as Array<{ name: string; description: string }>;
+    for (const name of ["search_albums", "random_album"]) {
+      expect(tools.find((t) => t.name === name)!.description).toContain("the user's own album collection");
+    }
+  });
+});

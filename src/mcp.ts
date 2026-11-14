@@ -27,10 +27,18 @@ export const SERVER_INFO = { name: "albums", title: "Albums", version: "1.0.0" }
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const LATEST = "2025-06-18";
 
-const INSTRUCTIONS = `Graham's list of albums worth playing from start to finish (albums.gcameron.com). \
-Mostly original studio albums; there is no ranking. Search by artist or album title (not track names), \
-filter by decade or genre, pick at random, add from an Apple Music link, edit notes, remove (kept in a \
-private history) and restore. Each album has an apple_url that can be played with a music connector.`;
+/**
+ * Server instructions. The first two sentences are for routing: they tell a
+ * client with several music connectors (Sonos, Last.fm, ...) when to use this
+ * one. The search_albums and random_album descriptions repeat the cue, since
+ * not every client passes server instructions to the model.
+ */
+const INSTRUCTIONS = `The user's curated personal album collection: albums worth playing start to finish \
+(albums.gcameron.com). Use when the user refers to "my albums", "my album list/collection", or wants \
+recommendations, random picks or suggestions drawn from their own albums (not their listening history). \
+Search by artist or title, filter by decade or genre, pick at random; add from an Apple Music link, edit \
+notes, set original years, remove (kept in a private history) and restore. No ranking: every album is a \
+favourite. Each album has an Apple Music URL for playback.`;
 
 /** The person Access identified. */
 export interface McpProps {
@@ -140,7 +148,7 @@ export const TOOLS: Tool[] = [
     name: "search_albums",
     title: "Search albums",
     description:
-      "List albums on the list, optionally filtered by words in the artist or title, exact artist, decade or genre. " +
+      "List albums in the user's own album collection (\"my albums\"), optionally filtered by words in the artist or title, exact artist, decade or genre. " +
       "With no arguments, lists the most recently added. Returns up to 200 per page with the total count.",
     inputSchema: {
       type: "object",
@@ -179,7 +187,9 @@ export const TOOLS: Tool[] = [
   {
     name: "random_album",
     title: "Pick something to play",
-    description: "Pick one or more random albums from the list, optionally within the same filters as search_albums.",
+    description:
+      "Pick one or more random albums from the user's own album collection, for \"what should I play?\" or suggestions from \"my albums\". " +
+      "Optionally within the same filters as search_albums.",
     inputSchema: {
       type: "object",
       properties: { ...FILTER_PROPS, count: { type: "integer", minimum: 1, maximum: 10, description: "How many to pick (default 1)." } },
