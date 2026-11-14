@@ -241,6 +241,12 @@ Tools (all owner-only; the token implies the owner):
 | `remove_album` | write | Off the list into the private history, optional reason. |
 | `restore_album` | write | Put a removed album back. |
 
+The server `instructions` describe it as "the user's curated personal album
+collection" and say when to use it ("my albums", suggestions drawn from their
+own albums, not their listening history), so clients with several music
+connectors (Sonos, Last.fm) route to it; `search_albums` and `random_album`
+repeat the cue for clients that don't pass instructions to the model.
+
 Results come as JSON text plus `structuredContent`. Each album includes
 `apple_url` and its page URL, so Claude can hand it to the Sonos connector
 (`play_album`) or look it up on Last.fm. Writes are logged with source `mcp`.
