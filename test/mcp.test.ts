@@ -101,8 +101,14 @@ describe("MCP tools", () => {
     expect(search.isError).toBe(false);
     expect(search.structuredContent).toMatchObject({ total: 1, albums: [{ id: violator, title: "Violator", artist: "Depeche Mode", year: 1990 }] });
     expect(search.content[0]!.text).toContain('"title": "Violator"');
+    expect(search.structuredContent.albums[0].cover).toMatch(/^https:\/\/is\d-ssl\.mzstatic\.com\/.+\/600x600bb\.jpg$/);
     expect((await call("search_albums", { decade: 1980 })).structuredContent.total).toBe(0);
-    expect((await call("get_album", { id: violator })).structuredContent).toMatchObject({ status: "listed", note: "Side two.", added_via: "web" });
+    expect((await call("get_album", { id: violator })).structuredContent).toMatchObject({
+      status: "listed",
+      note: "Side two.",
+      added_via: "web",
+      cover: expect.stringMatching(/600x600bb\.jpg$/),
+    });
     expect((await call("random_album", { genre: "Alternative" })).structuredContent.albums).toHaveLength(1);
     expect((await call("random_album", { genre: "Jazz" })).structuredContent.albums).toHaveLength(0);
   });
