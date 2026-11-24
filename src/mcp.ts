@@ -12,7 +12,7 @@ import {
   SORTS,
   type ListQuery,
 } from "./catalog.ts";
-import { formatAlbumTime } from "./format.ts";
+import { artwork, formatAlbumTime } from "./format.ts";
 import { json } from "./http.ts";
 
 /**
@@ -38,7 +38,9 @@ const INSTRUCTIONS = `The user's curated personal album collection: albums worth
 recommendations, random picks or suggestions drawn from their own albums (not their listening history). \
 Search by artist or title, filter by decade or genre, pick at random; add from an Apple Music link, edit \
 notes, set original years, remove (kept in a private history) and restore. No ranking: every album is a \
-favourite. Each album has an Apple Music URL for playback.`;
+favourite. Each album has an Apple Music URL for playback and a \`cover\` URL: its artwork, 600×600 JPEG on \
+Apple's CDN (null if Apple has none). To show covers, embed it as a Markdown image, linked to Apple Music: \
+[![<title>](<cover>)](<apple_url>).`;
 
 /** The person Access identified. */
 export interface McpProps {
@@ -64,6 +66,9 @@ class ToolError extends Error {}
 
 const SITE = "https://albums.gcameron.com";
 
+/** Cover size in MCP answers: big enough for a chat card, small enough to load fast. */
+export const COVER_SIZE = 600;
+
 function albumOut(a: AlbumRow, full = false) {
   const base = {
     id: a.id,
@@ -75,6 +80,7 @@ function albumOut(a: AlbumRow, full = false) {
     length: formatAlbumTime(a.duration_ms) || null,
     note: a.note,
     apple_url: a.apple_url,
+    cover: artwork(a.artwork_url, COVER_SIZE),
     page: `${SITE}/albums/${a.id}`,
     added: a.added_at.slice(0, 10),
   };
@@ -85,7 +91,6 @@ function albumOut(a: AlbumRow, full = false) {
     original_year: a.original_year,
     edition: a.edition,
     edition_release_date: a.release_date,
-    artwork: a.artwork_url ? a.artwork_url.replace("{w}x{h}", "600x600") : null,
     status: a.status,
     removed_at: a.removed_at,
     removed_reason: a.removed_reason,
@@ -149,7 +154,8 @@ export const TOOLS: Tool[] = [
     title: "Search albums",
     description:
       "List albums in the user's own album collection (\"my albums\"), optionally filtered by words in the artist or title, exact artist, decade or genre. " +
-      "With no arguments, lists the most recently added. Returns up to 200 per page with the total count.",
+      "With no arguments, lists the most recently added. Returns up to 200 per page with the total count. " +
+      "Each album has a cover image URL that can be shown as a Markdown image.",
     inputSchema: {
       type: "object",
       properties: {
@@ -189,7 +195,7 @@ export const TOOLS: Tool[] = [
     title: "Pick something to play",
     description:
       "Pick one or more random albums from the user's own album collection, for \"what should I play?\" or suggestions from \"my albums\". " +
-      "Optionally within the same filters as search_albums.",
+      "Optionally within the same filters as search_albums. Each album has a cover image URL that can be shown as a Markdown image.",
     inputSchema: {
       type: "object",
       properties: { ...FILTER_PROPS, count: { type: "integer", minimum: 1, maximum: 10, description: "How many to pick (default 1)." } },

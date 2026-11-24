@@ -249,7 +249,10 @@ repeat the cue for clients that don't pass instructions to the model.
 
 Results come as JSON text plus `structuredContent`. Each album includes
 `apple_url` and its page URL, so Claude can hand it to the Sonos connector
-(`play_album`) or look it up on Last.fm. Writes are logged with source `mcp`.
+(`play_album`) or look it up on Last.fm, and `cover`: the artwork on Apple's
+CDN (mzstatic.com) at 600×600, which Claude can show as a Markdown image
+(the instructions and the search/random tool descriptions say so). `null`
+when Apple has no artwork. Writes are logged with source `mcp`.
 
 ## 8. Code layout
 
