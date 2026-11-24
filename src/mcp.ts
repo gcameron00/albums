@@ -14,6 +14,7 @@ import {
 } from "./catalog.ts";
 import { artwork, formatAlbumTime } from "./format.ts";
 import { json } from "./http.ts";
+import { APP_HTML, APP_MIME, APP_RESOURCE, APP_RESOURCE_META, APP_TOOL_META, APP_URI } from "./mcpApp.ts";
 
 /**
  * Remote MCP server (Streamable HTTP, stateless, JSON responses) at /mcp.
@@ -38,9 +39,10 @@ const INSTRUCTIONS = `The user's curated personal album collection: albums worth
 recommendations, random picks or suggestions drawn from their own albums (not their listening history). \
 Search by artist or title, filter by decade or genre, pick at random; add from an Apple Music link, edit \
 notes, set original years, remove (kept in a private history) and restore. No ranking: every album is a \
-favourite. Each album has an Apple Music URL for playback and a \`cover\` URL: its artwork, 600×600 JPEG on \
-Apple's CDN (null if Apple has none). To show covers, embed it as a Markdown image, linked to Apple Music: \
-[![<title>](<cover>)](<apple_url>).`;
+favourite. Each album has an Apple Music URL for playback and a \`cover\` image URL. In clients that \
+support MCP Apps, search_albums, random_album and get_album show their albums as covers in the chat (with \
+Play and Apple Music buttons), so don't repeat the covers as Markdown images; a short answer that names the \
+albums is enough.`;
 
 /** The person Access identified. */
 export interface McpProps {
@@ -58,6 +60,8 @@ interface Tool {
   description: string;
   inputSchema: Record<string, unknown>;
   annotations: { readOnlyHint: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean };
+  /** Shown with the cover view (src/mcpApp.ts) in clients that support MCP Apps. */
+  covers?: boolean;
   run(args: Args, env: Env, deps: Deps): Promise<unknown>;
 }
 
@@ -155,7 +159,7 @@ export const TOOLS: Tool[] = [
     description:
       "List albums in the user's own album collection (\"my albums\"), optionally filtered by words in the artist or title, exact artist, decade or genre. " +
       "With no arguments, lists the most recently added. Returns up to 200 per page with the total count. " +
-      "Each album has a cover image URL that can be shown as a Markdown image.",
+      "Clients that support MCP Apps show the results as album covers.",
     inputSchema: {
       type: "object",
       properties: {
@@ -167,6 +171,7 @@ export const TOOLS: Tool[] = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true },
+    covers: true,
     async run(args, env) {
       const extra: Record<string, string> = { view: "list" };
       const sort = str(args, "sort");
@@ -186,6 +191,7 @@ export const TOOLS: Tool[] = [
     description: "Everything about one album by id, including a removed one (status, removal date and reason).",
     inputSchema: { type: "object", properties: { id: { type: "integer", minimum: 1 } }, required: ["id"], additionalProperties: false },
     annotations: { readOnlyHint: true },
+    covers: true,
     async run(args, env) {
       return albumOut(await loadAlbum(env, requiredId(args)), true);
     },
@@ -195,13 +201,14 @@ export const TOOLS: Tool[] = [
     title: "Pick something to play",
     description:
       "Pick one or more random albums from the user's own album collection, for \"what should I play?\" or suggestions from \"my albums\". " +
-      "Optionally within the same filters as search_albums. Each album has a cover image URL that can be shown as a Markdown image.",
+      "Optionally within the same filters as search_albums. Clients that support MCP Apps show the picks as album covers.",
     inputSchema: {
       type: "object",
       properties: { ...FILTER_PROPS, count: { type: "integer", minimum: 1, maximum: 10, description: "How many to pick (default 1)." } },
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true },
+    covers: true,
     async run(args, env) {
       const count = Math.min(Math.max(int(args, "count") ?? 1, 1), 10);
       const albums = await randomAlbums(env.DB, listQuery(args), count);
@@ -411,7 +418,11 @@ async function dispatch(msg: RpcRequest, env: Env, deps: Deps): Promise<unknown>
       const asked = typeof msg.params?.protocolVersion === "string" ? msg.params.protocolVersion : LATEST;
       return rpcResult(id, {
         protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : LATEST,
-        capabilities: { tools: { listChanged: false } },
+        capabilities: {
+          tools: { listChanged: false },
+          resources: { listChanged: false },
+          extensions: { "io.modelcontextprotocol/ui": {} },
+        },
         serverInfo: SERVER_INFO,
         instructions: INSTRUCTIONS,
       });
@@ -420,8 +431,23 @@ async function dispatch(msg: RpcRequest, env: Env, deps: Deps): Promise<unknown>
       return rpcResult(id, {});
     case "tools/list":
       return rpcResult(id, {
-        tools: TOOLS.map(({ name, title, description, inputSchema, annotations }) => ({ name, title, description, inputSchema, annotations })),
+        tools: TOOLS.map(({ name, title, description, inputSchema, annotations, covers }) => ({
+          name,
+          title,
+          description,
+          inputSchema,
+          annotations,
+          ...(covers ? { _meta: APP_TOOL_META } : {}),
+        })),
       });
+    case "resources/list":
+      return rpcResult(id, { resources: [APP_RESOURCE] });
+    case "resources/templates/list":
+      return rpcResult(id, { resourceTemplates: [] });
+    case "resources/read": {
+      if (msg.params?.uri !== APP_URI) return rpcError(id, -32002, `Resource not found: ${String(msg.params?.uri)}`);
+      return rpcResult(id, { contents: [{ uri: APP_URI, mimeType: APP_MIME, text: APP_HTML, _meta: APP_RESOURCE_META }] });
+    }
     case "tools/call": {
       const result = await callTool(msg.params ?? {}, env, deps);
       return result === null ? rpcError(id, -32602, `Unknown tool: ${String(msg.params?.name)}`) : rpcResult(id, result);

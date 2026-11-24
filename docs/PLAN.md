@@ -250,9 +250,22 @@ repeat the cue for clients that don't pass instructions to the model.
 Results come as JSON text plus `structuredContent`. Each album includes
 `apple_url` and its page URL, so Claude can hand it to the Sonos connector
 (`play_album`) or look it up on Last.fm, and `cover`: the artwork on Apple's
-CDN (mzstatic.com) at 600×600, which Claude can show as a Markdown image
-(the instructions and the search/random tool descriptions say so). `null`
-when Apple has no artwork. Writes are logged with source `mcp`.
+CDN (mzstatic.com) at 600×600, `null` when Apple has none.
+
+**Cover view (MCP App).** `search_albums`, `random_album` and `get_album`
+carry `_meta.ui.resourceUri` (and the legacy `ui/resourceUri`) pointing at
+`ui://albums/covers.html`, served by `resources/list` / `resources/read` as
+`text/html;profile=mcp-app` (MCP Apps extension, spec 2026-01-26). Clients
+that support MCP Apps (Claude web, desktop and mobile) show it beside the
+result: a cover grid (first 24, then "Show all"), or one album card. Tapping
+a cover opens its card with **Play** (sends "Play the album … on Sonos" into
+the chat via `ui/message`, so Claude plays it, Sonos favourites first),
+**Apple Music** and **Album page** (`ui/open-link`). The page is one
+self-contained HTML file in `src/mcpApp.ts`; its CSP allows images from
+`is1–is5-ssl.mzstatic.com` only. It follows the host's theme and CSS
+variables. Other clients ignore the `_meta` and read the JSON as before. The
+instructions tell Claude not to repeat covers as Markdown images (Claude
+holds external images behind "Load Image"). Writes are logged with source `mcp`.
 
 ## 8. Code layout
 
@@ -270,6 +283,7 @@ src/
   pages.ts        public HTML pages
   admin.ts        owner pages and writes under /admin
   mcp.ts          MCP JSON-RPC server and tools
+  mcpApp.ts       MCP App: the cover view (ui:// resource, HTML and CSP)
   format.ts, html.ts
 migrations/       D1 schema
 public/assets/    CSS, JS, favicon
