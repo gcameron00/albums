@@ -4,6 +4,7 @@ import { handle, type Deps, type Env } from "../src/app.ts";
 import { parseMusicApiAlbum } from "../src/apple.ts";
 import type { Identity } from "../src/auth.ts";
 import { mcp, TOOLS } from "../src/mcp.ts";
+import { APP_MIME, APP_URI } from "../src/mcpApp.ts";
 import { createTestDb } from "./helpers/d1.ts";
 import { kickApi, violatorApi } from "./fixtures/apple.ts";
 
@@ -81,7 +82,7 @@ describe("MCP protocol", () => {
       { email: "owner@example.com" },
     );
     expect(note.status).toBe(202);
-    expect((await rpc("resources/list")).body!.error.code).toBe(-32601);
+    expect((await rpc("prompts/list")).body!.error.code).toBe(-32601);
     expect((await rpc("tools/call", { name: "nope" })).body!.error.code).toBe(-32602);
     expect((await mcp(new Request(`${BASE}/mcp`), env, deps, { email: "owner@example.com" })).status).toBe(405);
     expect((await mcp(new Request(`${BASE}/mcp`, { method: "POST", body: "{" }), env, deps, { email: "a" })).status).toBe(400);
@@ -182,6 +183,44 @@ describe("/mcp behind Access", () => {
     const { env, deps, sqlite, violator } = await setup();
     await handle(post({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "update_note", arguments: { id: violator, note: "x" } } }), env, deps);
     expect(sqlite.prepare("SELECT source FROM events ORDER BY id DESC").get()).toEqual({ source: "mcp" });
+  });
+});
+
+describe("MCP App (cover view)", () => {
+  it("advertises resources and links the read tools to the cover view", async () => {
+    const { rpc } = await setup();
+    const init = (await rpc("initialize", { protocolVersion: "2025-06-18" })).body!.result;
+    expect(init.capabilities).toMatchObject({ tools: {}, resources: {} });
+    const tools = (await rpc("tools/list")).body!.result.tools as Array<{ name: string; _meta?: Record<string, any> }>;
+    for (const t of tools) {
+      if (["search_albums", "random_album", "get_album"].includes(t.name)) {
+        expect(t._meta).toMatchObject({ ui: { resourceUri: APP_URI }, "ui/resourceUri": APP_URI });
+      } else {
+        expect(t._meta).toBeUndefined();
+      }
+    }
+  });
+
+  it("lists and serves the cover view as an MCP App resource", async () => {
+    const { rpc } = await setup();
+    const list = (await rpc("resources/list")).body!.result.resources as Array<{ uri: string; mimeType: string }>;
+    expect(list).toEqual([expect.objectContaining({ uri: APP_URI, mimeType: APP_MIME })]);
+    expect(APP_MIME).toBe("text/html;profile=mcp-app");
+
+    const read = (await rpc("resources/read", { uri: APP_URI })).body!.result.contents as Array<Record<string, any>>;
+    expect(read).toHaveLength(1);
+    const page = read[0]!;
+    expect(page).toMatchObject({ uri: APP_URI, mimeType: APP_MIME });
+    expect(page._meta.ui.csp.resourceDomains).toContain("https://is1-ssl.mzstatic.com");
+    const text = page.text as string;
+    expect(text.startsWith("<!doctype html>")).toBe(true);
+    expect(text).toContain('"ui/initialize"');
+    expect(text).toContain('protocolVersion: "2026-01-26"');
+    expect(text).not.toContain("${");
+    expect(text).not.toMatch(/<script[^>]+src=|<link[^>]+href=/); // self-contained
+
+    expect((await rpc("resources/read", { uri: "ui://albums/nope.html" })).body!.error.code).toBe(-32002);
+    expect((await rpc("resources/templates/list")).body!.result.resourceTemplates).toEqual([]);
   });
 });
 

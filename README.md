@@ -13,7 +13,7 @@ Hosted at **https://albums.gcameron.com** on Cloudflare (Worker + D1).
 | **Add** | Share an album from the Music app through an iOS Shortcut, paste its Apple Music link into the form at `/admin`, or ask Claude. The Worker reads title, artist, year, genre, artwork, track count and length from the album's Apple Music page (or the Apple Music API once a key is set, [#5](https://github.com/gcameron00/albums/issues/5)). |
 | **Display** | Public, read-only views, with an optional note per album: a cover grid, a sortable list and a page of Apple Music players. Search by artist or title, filter by decade or genre, sort by date added, artist, year or title, or pick one at random. |
 | **Remove** | Signed-in only. A removed album leaves the public list but is kept on a private **History** page with the date and an optional reason, and can be restored. |
-| **MCP** | A remote MCP server at `/mcp`, so Claude can be connected to the list: search, pick something to play, statistics, history, add, edit notes, set original years, remove and put back. Owner only. |
+| **MCP** | A remote MCP server at `/mcp`, so Claude can be connected to the list: search, pick something to play, statistics, history, add, edit notes, set original years, remove and put back. Search and picks show as album covers in Claude (an MCP App). Owner only. |
 | **Access** | Anyone can view. Editing, history, the Shortcut endpoint and MCP are behind Cloudflare Access (one-time PIN by email) and limited to me. |
 
 ## How it works
